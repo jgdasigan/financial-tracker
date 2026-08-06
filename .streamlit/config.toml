@@ -1,0 +1,13 @@
+[theme]
+base = "dark"
+primaryColor = "#3987e5"
+backgroundColor = "#0d0d0d"
+secondaryBackgroundColor = "#1a1a19"
+textColor = "#ffffff"
+
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap"
+headingFont = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap"
+codeFont = "monospace"
+
+baseFontSize = 14
+baseFontWeight = 200
