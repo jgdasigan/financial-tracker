@@ -42,6 +42,37 @@ def _to_month_start(v) -> date:
     return date(v.year, v.month, 1)
 
 
+def _shift_month(month: date, offset: int) -> date:
+    month_index = month.year * 12 + month.month - 1 + offset
+    return date(month_index // 12, month_index % 12 + 1, 1)
+
+
+def is_completed_bill(bill, current_month: date | None = None) -> bool:
+    bill_type = _clean_str(bill.get("bill_type"))
+    start_month = bill.get("start_month")
+    if pd.isna(start_month):
+        return False
+
+    if bill_type == "onetime":
+        duration_months = 1
+    elif bill_type in {"installment", "pakaskas", "recurring"}:
+        duration_months = _clean_int(bill.get("duration_months"))
+        if duration_months is None:
+            return False
+    else:
+        return False
+
+    if duration_months < 1:
+        return False
+
+    comparison_month = _to_month_start(current_month or date.today())
+    month_after_final_payment = _shift_month(
+        _to_month_start(start_month),
+        duration_months,
+    )
+    return month_after_final_payment <= comparison_month
+
+
 def diff_bills_edit(original_df: pd.DataFrame, edited_df: pd.DataFrame) -> BillsDiff:
     """Compare the table as loaded from the DB (`original_df`, must include
     `id`) against what st.data_editor returned (`edited_df`, same columns —

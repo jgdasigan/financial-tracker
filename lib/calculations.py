@@ -5,6 +5,7 @@ and to reuse from both the dashboard and the affordability checker.
 """
 from __future__ import annotations
 
+from calendar import monthrange
 from dataclasses import dataclass
 from datetime import date
 
@@ -64,6 +65,35 @@ def bills_due_in_week(bills: list[BillDict], month: date, week_number: int) -> l
         if week_of_month(int(bill.get("due_day") or 1)) == week_number:
             due.append((bill, amt))
     return due
+
+
+def bill_due_date(bill: BillDict, month: date) -> date:
+    target_month = month_start(month)
+    final_day = monthrange(target_month.year, target_month.month)[1]
+    due_day = min(max(int(bill.get("due_day") or 1), 1), final_day)
+    return date(target_month.year, target_month.month, due_day)
+
+
+def bills_due_between(
+    bills: list[BillDict],
+    period_start: date,
+    period_end: date,
+) -> list[tuple[date, BillDict, float]]:
+    due_payments = []
+    target_month = month_start(period_start)
+    final_month = month_start(period_end)
+
+    while target_month <= final_month:
+        for bill in bills:
+            amount = bill_amount_for_month(bill, target_month)
+            if not amount:
+                continue
+            due_date = bill_due_date(bill, target_month)
+            if period_start <= due_date <= period_end:
+                due_payments.append((due_date, bill, amount))
+        target_month = add_months(target_month, 1)
+
+    return sorted(due_payments, key=lambda payment: (payment[0], -payment[2]))
 
 
 def card_tag(bill: BillDict) -> str | None:

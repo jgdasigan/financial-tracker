@@ -142,6 +142,17 @@ EDITABLE_COLUMNS = [
     "start_month", "duration_months", "card", "due_day", "include_in_projection", "notes",
 ]
 
+if bills_df.empty:
+    current_bills_df = bills_df.copy()
+    archived_bills_df = bills_df.copy()
+else:
+    archive_mask = bills_df.apply(
+        bill_edits.is_completed_bill,
+        axis=1,
+    )
+    current_bills_df = bills_df.loc[~archive_mask].copy()
+    archived_bills_df = bills_df.loc[archive_mask].copy()
+
 st.subheader("Current bills")
 st.caption("Edit any cell directly. Use the row's ⋮ menu (or select + Delete key) to remove a row, or the blank bottom row to add one.")
 
@@ -156,10 +167,10 @@ st.caption("Edit any cell directly. Use the row's ⋮ menu (or select + Delete k
 #         db.add_tag(new_tag.strip())
 #         st.rerun()
 
-if bills_df.empty:
-    st.info("No bills yet — add one above.")
+if current_bills_df.empty:
+    st.info("No current bills — add one above.")
 else:
-    editable = bills_df[EDITABLE_COLUMNS].copy()
+    editable = current_bills_df[EDITABLE_COLUMNS].copy()
     # st.data_editor renders a blank text cell as the literal word "None"
     # rather than empty — fill those with "" so it reads as blank. Numeric
     # blanks (duration_months, for "ongoing") don't have that same fix
@@ -199,7 +210,7 @@ else:
 
     save_col, undo_col, _spacer = st.columns([2, 2, 19])
     if save_col.button("Save changes", type="primary"):
-        diff = bill_edits.diff_bills_edit(bills_df, edited)
+        diff = bill_edits.diff_bills_edit(current_bills_df, edited)
         for bill_id in diff.deletes:
             db.delete_bill(bill_id)
         for kwargs in diff.adds:
@@ -219,3 +230,42 @@ else:
     if undo_col.button("Undo changes"):
         st.session_state.pop(EDITOR_KEY, None)
         st.rerun()
+
+st.divider()
+st.subheader("Archived bills")
+st.caption(
+    "Finite bills move here automatically after their final scheduled payment "
+    "month. Archived records remain available for reference."
+)
+
+if archived_bills_df.empty:
+    st.info("No completed bills yet.")
+else:
+    archived = archived_bills_df[EDITABLE_COLUMNS].copy()
+    archived["card"] = archived["card"].fillna("")
+    archived["notes"] = archived["notes"].fillna("")
+    st.dataframe(
+        archived,
+        hide_index=True,
+        width="stretch",
+        column_order=[
+            "name", "bill_type", "base_amount", "start_month", "duration_months",
+            "card", "due_day", "notes",
+        ],
+        column_config={
+            "name": st.column_config.TextColumn("Name"),
+            "bill_type": st.column_config.TextColumn("Type"),
+            "base_amount": st.column_config.NumberColumn(
+                "Monthly amount",
+                format="₱%.2f",
+            ),
+            "start_month": st.column_config.DateColumn(
+                "Start month",
+                format="YYYY-MM-DD",
+            ),
+            "duration_months": st.column_config.NumberColumn("Duration (mo.)"),
+            "card": st.column_config.TextColumn("Card / tag"),
+            "due_day": st.column_config.NumberColumn("Due day"),
+            "notes": st.column_config.TextColumn("Notes"),
+        },
+    )

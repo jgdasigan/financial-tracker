@@ -1,11 +1,12 @@
 """Dashboard — projected bills, income, and savings for the months ahead."""
-from datetime import date
+from datetime import date, timedelta
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 from lib import calculations as calc
+from lib import bill_edits
 from lib import db
 from lib import style
 from lib import theme
@@ -25,7 +26,12 @@ except Exception as e:
     )
     st.stop()
 
-bills = bills_df.to_dict("records") if not bills_df.empty else []
+all_bills = bills_df.to_dict("records") if not bills_df.empty else []
+bills = [
+    bill
+    for bill in all_bills
+    if not bill_edits.is_completed_bill(bill)
+]
 extra_income = calc.sum_bonuses_by_month(bonuses_df.to_dict("records")) if not bonuses_df.empty else {}
 # Pakaskas can opt out of the leftover/savings math (it's sometimes not
 # really your money) while still showing up in its own table and in
@@ -37,7 +43,30 @@ with st.sidebar:
     st.header("Projection window")
     today = date.today()
     horizon_start = st.date_input("Start month", value=date(today.year, today.month, 1))
-    n_months = st.slider("Months to project", min_value=3, max_value=24, value=8)
+    n_months = st.slider("Months to project", min_value=3, max_value=24, value=3)
+
+
+def _amounts_hidden(section_key: str) -> bool:
+    state_key = f"dashboard_hide_{section_key}"
+    if state_key not in st.session_state:
+        st.session_state[state_key] = True
+    help_text = (
+        "Show amounts"
+        if st.session_state[state_key]
+        else "Hide amounts"
+    )
+    if st.button(
+        "👁" if st.session_state[state_key] else "🙈",
+        key=f"{state_key}_button",
+        help=help_text,
+        type="tertiary",
+    ):
+        st.session_state[state_key] = not st.session_state[state_key]
+    return st.session_state[state_key]
+
+
+def _currency(value: float, hidden: bool) -> str:
+    return "••••••" if hidden else f"₱{value:,.2f}"
 
 if not bills:
     st.info("No bills yet. Add your recurring bills and installments on **Manage bills** to see a projection.")
@@ -54,23 +83,48 @@ this_month_bonus = extra_income.get(calc.month_start(horizon_start), 0.0)
 income_label = "💰 Monthly income" + (" (incl. bonus)" if this_month_bonus else "")
 
 # --------------------------------------------------------------------- KPIs --
+_, overview_eye = st.columns([20, 1])
+with overview_eye:
+    overview_hidden = _amounts_hidden("overview")
+
 k1, k2, k3, k4 = st.columns(4)
 kpi_specs = [
-    (k1, "🏦 Current savings", f"₱{settings['current_savings']:,.2f}"),
-    (k2, income_label, f"₱{this_month_income:,.2f}"),
-    (k3, "🧾 This month's bills", f"₱{this_month_bills:,.2f}"),
-    (k4, "✅ This month's leftover", f"₱{this_month_leftover:,.2f}"),
+    (
+        k1,
+        "🏦 Current savings",
+        _currency(settings["current_savings"], overview_hidden),
+    ),
+    (k2, income_label, _currency(this_month_income, overview_hidden)),
+    (
+        k3,
+        "🧾 This month's bills",
+        _currency(this_month_bills, overview_hidden),
+    ),
+    (
+        k4,
+        "✅ This month's leftover",
+        _currency(this_month_leftover, overview_hidden),
+    ),
 ]
 for col, label, value in kpi_specs:
     with col:
         with st.container(border=True):
-            st.markdown(f"<div style='color:{theme.MUTED_INK}; font-size:0.8rem;'>{label}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div style='font-size:1.5rem; font-weight:700;'>{value}</div>", unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="ft-kpi">'
+                f'<div class="ft-kpi-label">{label}</div>'
+                f'<div class="ft-kpi-value">{value}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
 st.write("")
 
 
-def _full_height_table(df: pd.DataFrame, bold_last_row: bool = False):
+def _full_height_table(
+    df: pd.DataFrame,
+    hidden: bool,
+    bold_last_row: bool = False,
+):
     """st.dataframe defaults to a fixed height that scrolls internally once a
     table has more than a handful of rows — size it to the row count instead
     so the whole schedule is visible with no inner scrollbar.
@@ -80,7 +134,9 @@ def _full_height_table(df: pd.DataFrame, bold_last_row: bool = False):
     directly, and blank cells came back through as the literal text "None"
     instead of empty — stringifying ourselves leaves no NaN for it to guess
     about."""
-    str_df = df.map(lambda v: f"₱{v:,.2f}" if pd.notna(v) else "")
+    str_df = df.map(
+        lambda value: _currency(value, hidden) if pd.notna(value) else ""
+    )
     styled = str_df.style
     if bold_last_row:
         styled = styled.set_properties(subset=pd.IndexSlice[[str_df.index[-1]], :], **{"font-weight": "bold"})
@@ -88,11 +144,23 @@ def _full_height_table(df: pd.DataFrame, bold_last_row: bool = False):
     st.dataframe(styled, width="stretch", height=height)
 
 
+def _apply_chart_privacy(fig: go.Figure, hidden: bool) -> None:
+    if not hidden:
+        return
+    fig.update_yaxes(showticklabels=False, title=None)
+    fig.update_traces(
+        hovertemplate="%{x}<extra>%{fullData.name}</extra>",
+    )
+
+
 # ------------------------------------------------------------- credit cards --
 # Pakaskas counts here regardless of include_in_projection: the card bill is
 # still due either way, whether or not the money is projected as "yours".
 card_bills = [b for b in bills if b["bill_type"] in ("installment", "pakaskas") and calc.card_tag(b)]
-cards_seen = {}
+cards_seen = {
+    card_name: {"due": 0.0, "count": 0}
+    for card_name in db.KNOWN_CARDS
+}
 for b in card_bills:
     due_this_month = calc.bill_amount_for_month(b, calc.month_start(today)) or 0.0
     if due_this_month <= 0:
@@ -103,18 +171,32 @@ for b in card_bills:
     entry["count"] += 1
 
 if cards_seen:
-    st.subheader("Cards")
-    card_cols = st.columns(min(len(cards_seen), 4) or 1)
+    cards_title, cards_eye = st.columns([20, 1])
+    with cards_title:
+        st.subheader("Cards")
+    with cards_eye:
+        cards_hidden = _amounts_hidden("cards")
+
+    card_cols = st.columns(len(cards_seen))
     for i, (card_name, info) in enumerate(cards_seen.items()):
-        with card_cols[i % len(card_cols)]:
+        with card_cols[i]:
             st.markdown(
-                style.credit_card_html(card_name, info["due"], info["count"]),
+                style.credit_card_html(
+                    card_name,
+                    info["due"],
+                    info["count"],
+                    hide_amount=cards_hidden,
+                ),
                 unsafe_allow_html=True,
             )
     st.write("")
 
     # ------------------------------------------------------ card due by month --
-    st.markdown("##### Card payments due by month")
+    card_trends_title, card_trends_eye = st.columns([20, 1])
+    with card_trends_title:
+        st.markdown("##### Card payments due by month")
+    with card_trends_eye:
+        card_trends_hidden = _amounts_hidden("card_trends")
     st.caption("What's actually charged to each card that month, alongside your projected savings balance.")
     with st.container(border=True):
         fig = go.Figure()
@@ -138,6 +220,7 @@ if cards_seen:
             xaxis=dict(gridcolor=theme.GRIDLINE),
             hovermode="x unified",
         )
+        _apply_chart_privacy(fig, card_trends_hidden)
         st.plotly_chart(fig, width="stretch")
 
         due_rows = {
@@ -146,7 +229,7 @@ if cards_seen:
         }
         due_rows["Savings balance"] = projection["savings_balance"].tolist()
         due_df = pd.DataFrame(due_rows, index=[calc.month_label(m) for m in months]).T
-        _full_height_table(due_df)
+        _full_height_table(due_df, hidden=card_trends_hidden)
     st.write("")
 
 # ------------------------------------------------------ main layout: chart + upcoming --
@@ -154,9 +237,13 @@ main_col, side_col = st.columns([2, 1])
 
 with main_col:
     with st.container(border=True):
-        st.markdown(f"<div style='color:{theme.MUTED_INK}; font-size:0.8rem;'>Projected balance, {n_months} months out</div>", unsafe_allow_html=True)
+        projection_title, projection_eye = st.columns([12, 1])
+        with projection_title:
+            st.markdown(f"<div style='color:{theme.MUTED_INK}; font-size:0.8rem;'>Projected balance, {n_months} months out</div>", unsafe_allow_html=True)
+        with projection_eye:
+            projection_hidden = _amounts_hidden("projection")
         end_balance = projection["savings_balance"].iloc[-1] if len(projection) else settings["current_savings"]
-        st.markdown(f"<div style='font-size:1.8rem; font-weight:700; margin-bottom:6px;'>₱{end_balance:,.2f}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size:1.8rem; font-weight:700; margin-bottom:6px;'>{_currency(end_balance, projection_hidden)}</div>", unsafe_allow_html=True)
 
         fig = go.Figure()
         fig.add_trace(go.Scatter(
@@ -180,6 +267,7 @@ with main_col:
             xaxis=dict(gridcolor=theme.GRIDLINE),
             hovermode="x unified",
         )
+        _apply_chart_privacy(fig, projection_hidden)
         st.plotly_chart(fig, width="stretch")
 
     negative_months = projection[projection["leftover"] < 0]
@@ -192,33 +280,70 @@ with main_col:
 
 with side_col:
     with st.container(border=True):
-        st.markdown("**Upcoming payments**")
+        upcoming_title, upcoming_eye = st.columns([8, 1])
+        with upcoming_title:
+            st.markdown("**Upcoming payments**")
+        with upcoming_eye:
+            upcoming_hidden = _amounts_hidden("upcoming")
+        payment_window = st.segmented_control(
+            "Payment window",
+            ["Week", "Month"],
+            default="Week",
+            label_visibility="collapsed",
+            width="stretch",
+        )
+
+        if payment_window == "Month":
+            period_start = calc.month_start(today)
+            period_end = calc.add_months(period_start, 1) - timedelta(days=1)
+            empty_message = "Nothing due this month."
+        else:
+            period_start = today - timedelta(days=today.weekday())
+            period_end = period_start + timedelta(days=6)
+            empty_message = "Nothing due this week."
+
         icon_by_type = {"installment": "💳", "recurring": "🔁", "onetime": "🧾", "pakaskas": "🤝"}
-        upcoming = []
-        for b in bills:
-            for i in range(2):  # this month + next month
-                m = calc.add_months(calc.month_start(today), i)
-                amt = calc.bill_amount_for_month(b, m)
-                if amt:
-                    upcoming.append((m, b, amt))
-        upcoming.sort(key=lambda row: (row[0], -row[2]))
+        upcoming = calc.bills_due_between(
+            bills,
+            period_start,
+            period_end,
+        )
         if not upcoming:
-            st.caption("Nothing due this month or next.")
-        for m, b, amt in upcoming[:8]:
-            when = "This month" if m == calc.month_start(today) else "Next month"
-            pill_kind = "warning" if when == "This month" else "muted"
+            st.caption(empty_message)
+        payment_rows = []
+        for due_date, b, amt in upcoming:
+            when = (
+                "Today"
+                if due_date == today
+                else f"{due_date.strftime('%b')} {due_date.day}"
+            )
+            pill_kind = "warning" if due_date <= today else "muted"
             tag = calc.card_tag(b)
-            subtitle = calc.month_label(m) + (f" · {tag}" if tag else "")
-            st.markdown(
+            subtitle = (
+                f"Due {due_date.strftime('%A')}"
+                + (f" · {tag}" if tag else "")
+            )
+            payment_rows.append(
                 style.payment_row_html(
                     icon_by_type.get(b["bill_type"], "🧾"), b["name"], subtitle, amt,
                     pill_html=style.pill(when, pill_kind),
-                ),
+                    hide_amount=upcoming_hidden,
+                )
+            )
+        if payment_rows:
+            st.markdown(
+                '<div class="ft-upcoming-scroll">'
+                + "".join(payment_rows)
+                + "</div>",
                 unsafe_allow_html=True,
             )
 
 st.write("")
-st.subheader("Full payments schedule")
+schedule_title, schedule_eye = st.columns([20, 1])
+with schedule_title:
+    st.subheader("Full payments schedule")
+with schedule_eye:
+    schedule_hidden = _amounts_hidden("schedule")
 
 all_tags = sorted({calc.card_tag(b) for b in bills if calc.card_tag(b)})
 selected_tags = st.multiselect(
@@ -232,25 +357,59 @@ TABLE_SPECS = [
     ("One-time", "onetime"),
     ("Pakaskas", "pakaskas"),
 ]
-for label, btype in TABLE_SPECS:
-    group = [b for b in filtered_bills if b["bill_type"] == btype]
-    if not group:
-        continue
-    st.markdown(f"**{label}**")
-    if btype == "pakaskas":
-        excluded = sum(1 for b in group if not b.get("include_in_projection", True))
-        if excluded:
-            st.caption(f"{excluded} of {len(group)} excluded from the leftover/savings math above — see Manage bills to change.")
-    group_schedule, _ = calc.build_schedule(group, calc.month_start(horizon_start), n_months)
-    group_schedule.loc["Total"] = group_schedule.sum(numeric_only=True, skipna=True)
-    _full_height_table(group_schedule, bold_last_row=True)
-    st.write("")
+table_groups = [
+    (
+        label,
+        btype,
+        [bill for bill in filtered_bills if bill["bill_type"] == btype],
+    )
+    for label, btype in TABLE_SPECS
+]
+table_groups = [group for group in table_groups if group[2]]
 
-if not filtered_bills:
+if table_groups:
+    table_tabs = st.tabs(
+        [
+            f"{label} ({len(group)})"
+            for label, _, group in table_groups
+        ]
+    )
+    for tab, (label, btype, group) in zip(table_tabs, table_groups):
+        with tab:
+            if btype == "pakaskas":
+                excluded = sum(
+                    1
+                    for bill in group
+                    if not bill.get("include_in_projection", True)
+                )
+                if excluded:
+                    st.caption(
+                        f"{excluded} of {len(group)} excluded from the "
+                        "leftover/savings math above — see Manage bills "
+                        "to change."
+                    )
+            group_schedule, _ = calc.build_schedule(
+                group,
+                calc.month_start(horizon_start),
+                n_months,
+            )
+            group_schedule.index.name = "Bill"
+            group_schedule.loc["Total"] = group_schedule.sum(
+                numeric_only=True,
+                skipna=True,
+            )
+            _full_height_table(
+                group_schedule,
+                hidden=schedule_hidden,
+                bold_last_row=True,
+            )
+elif not filtered_bills:
     st.caption("No bills match this filter.")
 
 with st.expander("Monthly income / bills / savings detail"):
     detail = projection.copy()
     for col in ["income", "total_bills", "leftover", "savings_balance"]:
-        detail[col] = detail[col].map(lambda v: f"₱{v:,.2f}")
+        detail[col] = detail[col].map(
+            lambda value: _currency(value, schedule_hidden)
+        )
     st.dataframe(detail, width="stretch", hide_index=True, height=(len(detail) + 1) * 35 + 3)

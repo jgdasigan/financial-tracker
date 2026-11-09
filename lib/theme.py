@@ -7,44 +7,55 @@ we only need one column.
 """
 
 # Categorical slots (fixed order — never cycle these)
-SERIES_BLUE = "#3987e5"     # income
-SERIES_ORANGE = "#d95926"   # bills / commitments
-SERIES_AQUA = "#199e70"     # savings balance
-SERIES_VIOLET = "#9085e9"   # secondary card accent (e.g. a second card brand)
+SERIES_BLUE = "#6c8cff"     # income
+SERIES_ORANGE = "#ff8a65"   # bills / commitments
+SERIES_AQUA = "#35d6b4"     # savings balance
+SERIES_VIOLET = "#aa8cff"   # secondary card accent (e.g. a second card brand)
 
 # Status palette (fixed — meaning never carried by color alone; pair with icon/label)
-STATUS_GOOD = "#0ca30c"
-STATUS_WARNING = "#fab219"
-STATUS_SERIOUS = "#ec835a"
-STATUS_CRITICAL = "#d03b3b"
+STATUS_GOOD = "#45d483"
+STATUS_WARNING = "#ffc857"
+STATUS_SERIOUS = "#ff9f6e"
+STATUS_CRITICAL = "#ff6b7a"
 
 # Chrome / ink — dark surface set
-PAGE_PLANE = "#0d0d0d"
-CHART_SURFACE = "#1a1a19"
-CARD_SURFACE = "#212120"
-PRIMARY_INK = "#ffffff"
-SECONDARY_INK = "#c3c2b7"
-MUTED_INK = "#898781"
-GRIDLINE = "#2c2c2a"
-BASELINE = "#383835"
-BORDER = "rgba(255,255,255,0.10)"
-SUCCESS_TEXT = "#0ca30c"
+PAGE_PLANE = "#06101f"
+CHART_SURFACE = "#0d1b2e"
+CARD_SURFACE = "#11243a"
+PRIMARY_INK = "#f5f8ff"
+SECONDARY_INK = "#c3cee0"
+MUTED_INK = "#8fa2bd"
+GRIDLINE = "#1d3550"
+BASELINE = "#2a4564"
+BORDER = "rgba(151, 178, 218, 0.16)"
+SUCCESS_TEXT = "#45d483"
 
-FONT_FAMILY = "system-ui, -apple-system, 'Segoe UI', sans-serif"
+FONT_FAMILY = "'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif"
 
 # A couple of distinct gradients for the credit-card visual, keyed by known
 # card tags. Deliberately generic (not a copy of any real bank's card art) —
 # just enough to tell cards apart at a glance. Anything not in this map
 # (custom "Other" tags, "Cash") falls back to CARD_GRADIENT_DEFAULT.
 CARD_GRADIENTS = {
-    "RCBC": (SERIES_BLUE, "#1c5cab"),
-    "BDO": (SERIES_AQUA, "#0d5c42"),
+    "RCBC": ("#4f6ff7", "#18367f"),
+    "BDO": ("#b28a3d", "#66501f"),
+    "Maribank CC": ("#ff7f6e", "#a6344f"),
+    "Tiktok PayLater": ("#26344f", "#09111f"),
+    "Shopee PayLater": ("#ff7148", "#9f2f24"),
 }
-CARD_GRADIENT_DEFAULT = (SERIES_VIOLET, "#4a3aa7")
+CARD_GRADIENT_DEFAULT = (SERIES_VIOLET, "#503d9d")
+
+CARD_LOGOS = {
+    "RCBC": "R",
+    "BDO": "BDO",
+    "Maribank CC": "M",
+    "Tiktok PayLater": "♪",
+    "Shopee PayLater": "S",
+}
 
 # For the "outstanding balance by month" line chart: one line per card, plus
 # a savings-balance line. Savings keeps SERIES_AQUA (same meaning as in the
 # main projection chart); card lines cycle through the rest, deliberately
 # *not* reusing aqua so a card's line is never confused with the savings
 # line when both are on screen together.
-CARD_LINE_COLORS = [SERIES_BLUE, SERIES_ORANGE, SERIES_VIOLET, "#eda100"]
+CARD_LINE_COLORS = [SERIES_BLUE, SERIES_ORANGE, SERIES_VIOLET, "#ffc857"]

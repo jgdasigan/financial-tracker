@@ -1,13 +1,13 @@
 [theme]
 base = "dark"
-primaryColor = "#3987e5"
-backgroundColor = "#0d0d0d"
-secondaryBackgroundColor = "#1a1a19"
-textColor = "#ffffff"
+primaryColor = "#6c8cff"
+backgroundColor = "#06101f"
+secondaryBackgroundColor = "#0d1b2e"
+textColor = "#f5f8ff"
 
-font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap"
-headingFont = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap"
+font = "Manrope:https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap"
+headingFont = "Manrope:https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap"
 codeFont = "monospace"
 
 baseFontSize = 14
-baseFontWeight = 200
+baseFontWeight = 400

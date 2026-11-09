@@ -7,14 +7,69 @@ visual, status pills — live here as plain HTML snippets.
 """
 from __future__ import annotations
 
+from html import escape
+
 import streamlit as st
 
 from lib import theme
 
 _CSS = f"""
 <style>
-/* Trim the default top padding so the dashboard sits higher on the page. */
-.block-container {{ padding-top: 2rem; }}
+.stApp {{
+    background:
+        radial-gradient(circle at 12% -10%, rgba(108,140,255,0.16), transparent 32rem),
+        radial-gradient(circle at 92% 4%, rgba(53,214,180,0.09), transparent 28rem),
+        {theme.PAGE_PLANE};
+}}
+
+header[data-testid="stHeader"] {{
+    background: rgba(6,16,31,0.72);
+    border-bottom: 1px solid {theme.BORDER};
+    backdrop-filter: blur(18px);
+}}
+
+.block-container {{
+    max-width: 1440px;
+    padding-top: 2.6rem;
+    padding-bottom: 4rem;
+}}
+
+h1, h2, h3 {{
+    letter-spacing: -0.035em;
+}}
+h1 {{
+    font-weight: 800 !important;
+    color: {theme.PRIMARY_INK};
+    text-shadow: 0 8px 30px rgba(108,140,255,0.15);
+}}
+h2, h3 {{
+    font-weight: 700 !important;
+}}
+p, label {{
+    color: {theme.SECONDARY_INK};
+}}
+
+section[data-testid="stSidebar"] {{
+    background:
+        linear-gradient(180deg, rgba(17,36,58,0.96), rgba(7,21,38,0.98));
+    border-right: 1px solid {theme.BORDER};
+}}
+section[data-testid="stSidebar"] [data-testid="stSidebarNav"] a {{
+    border: 1px solid transparent;
+    border-radius: 12px;
+    margin: 3px 10px;
+    transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}}
+section[data-testid="stSidebar"] [data-testid="stSidebarNav"] a:hover {{
+    background: rgba(108,140,255,0.10);
+    border-color: {theme.BORDER};
+    transform: translateX(2px);
+}}
+section[data-testid="stSidebar"] [data-testid="stSidebarNav"] a[aria-current="page"] {{
+    background: linear-gradient(135deg, rgba(108,140,255,0.22), rgba(53,214,180,0.08));
+    border-color: rgba(108,140,255,0.35);
+    box-shadow: inset 3px 0 0 {theme.SERIES_BLUE};
+}}
 
 /* Sidebar as a flex column so the logout button (rendered last, see
    lib/auth.py) can be pinned to the bottom edge via margin-top:auto instead
@@ -22,16 +77,88 @@ _CSS = f"""
 div[data-testid="stSidebarContent"] {{
     display: flex !important;
     flex-direction: column !important;
+    min-height: 100dvh;
+    padding-bottom: 1rem;
 }}
 .st-key-logout_btn {{
-    margin-top: auto;
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    margin-top: auto !important;
     padding-top: 1rem;
+    padding-bottom: 0.25rem;
+    background: linear-gradient(180deg, transparent, rgba(7,21,38,0.98) 32%);
 }}
 
 /* Bordered containers (our "cards") get a touch more rounding + a subtle
    surface tint so they read as distinct tiles against the page background. */
 div[data-testid="stVerticalBlockBorderWrapper"] {{
-    border-radius: 14px !important;
+    background: linear-gradient(
+        145deg,
+        rgba(17,36,58,0.88),
+        rgba(10,27,47,0.78)
+    );
+    border: 1px solid {theme.BORDER} !important;
+    border-radius: 18px !important;
+    box-shadow:
+        0 18px 45px rgba(0,0,0,0.20),
+        inset 0 1px 0 rgba(255,255,255,0.025);
+    backdrop-filter: blur(16px);
+}}
+
+.st-key-login_card {{
+    margin-top: clamp(2rem, 10vh, 7rem);
+}}
+.st-key-login_card div[data-testid="stVerticalBlockBorderWrapper"] {{
+    padding: 0.8rem;
+    border-color: rgba(108,140,255,0.28) !important;
+    border-radius: 24px !important;
+    box-shadow:
+        0 30px 80px rgba(0,0,0,0.34),
+        0 0 0 1px rgba(255,255,255,0.02);
+}}
+.ft-login-brand {{
+    padding: 0.5rem 0 1.1rem;
+    text-align: center;
+}}
+.ft-login-mark {{
+    display: inline-flex;
+    width: 54px;
+    height: 54px;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1rem;
+    border: 1px solid rgba(108,140,255,0.34);
+    border-radius: 17px;
+    background: linear-gradient(145deg, rgba(108,140,255,0.24), rgba(53,214,180,0.10));
+    color: #dfe7ff;
+    font-size: 1.5rem;
+    font-weight: 800;
+    box-shadow: 0 12px 30px rgba(25,49,105,0.30);
+}}
+.ft-login-eyebrow {{
+    color: {theme.SERIES_AQUA};
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+}}
+.ft-login-title {{
+    margin-top: 0.35rem;
+    color: {theme.PRIMARY_INK};
+    font-size: 1.45rem;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+}}
+.ft-login-subtitle {{
+    max-width: 300px;
+    margin: 0.45rem auto 0;
+    color: {theme.MUTED_INK};
+    font-size: 0.84rem;
+    line-height: 1.55;
+}}
+.st-key-login_card [data-testid="stForm"] {{
+    border-top: 1px solid {theme.BORDER};
+    padding-top: 1.15rem;
 }}
 
 .ft-pill {{
@@ -50,21 +177,56 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{
 .ft-pill-muted {{ background: rgba(137,135,129,0.16); color: {theme.MUTED_INK}; }}
 
 .ft-card {{
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.16);
     border-radius: 16px;
-    padding: 18px 20px;
+    padding: 14px 15px;
     color: #ffffff;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    min-height: 148px;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+    min-height: 116px;
+    box-shadow: 0 14px 30px rgba(0,0,0,0.24);
 }}
-.ft-card-top {{ display: flex; justify-content: space-between; align-items: flex-start; }}
-.ft-card-brand {{ font-weight: 700; font-size: 0.95rem; letter-spacing: 0.02em; }}
-.ft-card-number {{ font-size: 1.05rem; letter-spacing: 0.18em; opacity: 0.85; margin: 14px 0; }}
-.ft-card-bottom {{ display: flex; justify-content: space-between; align-items: baseline; }}
-.ft-card-label {{ font-size: 0.7rem; opacity: 0.75; text-transform: uppercase; letter-spacing: 0.04em; }}
-.ft-card-amount {{ font-size: 1.35rem; font-weight: 700; margin-top: 2px; }}
+.ft-card::after {{
+    content: "";
+    position: absolute;
+    width: 150px;
+    height: 150px;
+    right: -50px;
+    top: -70px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.12);
+    filter: blur(2px);
+}}
+.ft-card-top {{ display: flex; flex-direction: column; gap: 8px; align-items: flex-start; position: relative; z-index: 1; }}
+.ft-card-brand {{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    font-weight: 700;
+    font-size: 0.82rem;
+    line-height: 1.2;
+}}
+.ft-card-logo {{
+    display: inline-flex;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255,255,255,0.24);
+    border-radius: 9px;
+    background: rgba(255,255,255,0.14);
+    font-size: 0.68rem;
+    font-weight: 800;
+}}
+.ft-card-active {{ font-size: 0.67rem; opacity: 0.76; }}
+.ft-card-bottom {{ display: flex; justify-content: space-between; align-items: baseline; position: relative; z-index: 1; }}
+.ft-card-label {{ font-size: 0.62rem; opacity: 0.75; text-transform: uppercase; letter-spacing: 0.04em; }}
+.ft-card-amount {{ font-size: 1.02rem; font-weight: 700; margin-top: 2px; }}
 .ft-card-sub {{ font-size: 0.75rem; opacity: 0.8; }}
 
 .ft-row {{
@@ -85,41 +247,94 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{
 .ft-row-sub {{ font-size: 0.78rem; color: {theme.MUTED_INK}; }}
 .ft-row-amount {{ font-weight: 700; font-size: 0.95rem; }}
 
+.ft-kpi {{
+    padding: 0.15rem 0;
+    text-align: center;
+}}
+.ft-kpi-label {{
+    color: {theme.MUTED_INK};
+    font-size: 0.76rem;
+}}
+.ft-kpi-value {{
+    margin-top: 0.18rem;
+    color: {theme.PRIMARY_INK};
+    font-size: 1.35rem;
+    font-weight: 750;
+    letter-spacing: -0.02em;
+}}
+
+.ft-upcoming-scroll {{
+    max-height: 415px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 8px;
+}}
+
 /* -------------------------------------------------------------- buttons -- */
 .stButton > button, .stFormSubmitButton > button, .stDownloadButton > button {{
-    border-radius: 10px !important;
+    min-height: 2.45rem;
+    border-radius: 9px !important;
     border: 1px solid {theme.BORDER} !important;
     font-weight: 600;
-    padding: 0.5rem 1.1rem;
-    transition: transform 0.06s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    padding: 0.42rem 0.95rem;
+    background: rgba(17,36,58,0.52);
+    box-shadow: none;
+    transition: background 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
 }}
 .stButton > button:hover, .stFormSubmitButton > button:hover, .stDownloadButton > button:hover {{
-    transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(0,0,0,0.35);
+    background: rgba(108,140,255,0.10);
+    box-shadow: 0 0 0 3px rgba(108,140,255,0.10);
     border-color: {theme.SERIES_BLUE} !important;
 }}
 .stButton > button:active, .stFormSubmitButton > button:active {{
-    transform: translateY(0);
+    background: rgba(108,140,255,0.16);
 }}
 .stButton > button[kind="primary"], .stFormSubmitButton > button[kind="primary"] {{
-    background: linear-gradient(135deg, {theme.SERIES_BLUE}, #1c5cab) !important;
-    border: none !important;
+    background: {theme.SERIES_BLUE} !important;
+    border-color: {theme.SERIES_BLUE} !important;
+    color: #ffffff !important;
 }}
 .stButton > button[kind="primary"]:hover, .stFormSubmitButton > button[kind="primary"]:hover {{
-    box-shadow: 0 6px 18px rgba(57,135,229,0.45);
+    background: #7b98ff !important;
+    box-shadow: 0 0 0 3px rgba(108,140,255,0.18);
+}}
+.stButton > button:focus-visible,
+.stFormSubmitButton > button:focus-visible,
+.stDownloadButton > button:focus-visible {{
+    outline: 2px solid {theme.SERIES_AQUA};
+    outline-offset: 2px;
+}}
+div[class*="st-key-del_"] button {{
+    color: {theme.STATUS_CRITICAL};
+    border-color: rgba(255,107,122,0.24) !important;
+}}
+.st-key-logout_btn button {{
+    width: 100%;
+}}
+div[class*="st-key-dashboard_hide_"] button {{
+    width: 2.1rem;
+    min-height: 2.1rem;
+    padding: 0 !important;
+    border-radius: 999px !important;
+    color: {theme.MUTED_INK};
+}}
+div[class*="st-key-dashboard_hide_"] button:hover {{
+    color: {theme.PRIMARY_INK};
 }}
 
 /* --------------------------------------------------- dropdowns / inputs -- */
 div[data-baseweb="select"] > div,
 .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea {{
-    border-radius: 10px !important;
+    min-height: 2.65rem;
+    border-radius: 12px !important;
     border-color: {theme.BORDER} !important;
+    background: rgba(6,16,31,0.62) !important;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }}
 div[data-baseweb="select"]:focus-within > div,
 .stTextInput input:focus, .stNumberInput input:focus, .stDateInput input:focus {{
     border-color: {theme.SERIES_BLUE} !important;
-    box-shadow: 0 0 0 1px {theme.SERIES_BLUE} !important;
+    box-shadow: 0 0 0 3px rgba(108,140,255,0.16) !important;
 }}
 /* Selected chips inside a multiselect */
 span[data-baseweb="tag"] {{
@@ -151,8 +366,125 @@ div[role="radiogroup"] label:hover {{
 
 /* ---------------------------------------------------------- expanders -- */
 div[data-testid="stExpander"] {{
-    border-radius: 12px !important;
+    overflow: hidden;
+    background: rgba(13,27,46,0.72);
+    border-radius: 14px !important;
+    border: 1px solid {theme.BORDER} !important;
+}}
+
+div[data-testid="stMetric"] {{
+    background: linear-gradient(145deg, rgba(17,36,58,0.82), rgba(10,27,47,0.70));
+    border: 1px solid {theme.BORDER};
+    border-radius: 16px;
+    padding: 1rem 1.1rem;
+}}
+
+div[data-testid="stDataFrame"],
+div[data-testid="stDataEditor"] {{
+    position: relative;
+    overflow: hidden;
+    background: rgba(7,21,38,0.82);
+    border: 1px solid rgba(151,178,218,0.20);
+    border-radius: 12px;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.14);
+}}
+div[data-testid="stDataFrame"]::before,
+div[data-testid="stDataEditor"]::before {{
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    z-index: 3;
+    background: linear-gradient(90deg, {theme.SERIES_BLUE}, {theme.SERIES_AQUA});
+}}
+div[data-testid="stDataFrame"] [role="columnheader"],
+div[data-testid="stDataEditor"] [role="columnheader"] {{
+    color: {theme.PRIMARY_INK} !important;
+    background: #10243b !important;
     border-color: {theme.BORDER} !important;
+    font-weight: 700 !important;
+}}
+div[data-testid="stDataFrame"] [role="gridcell"],
+div[data-testid="stDataEditor"] [role="gridcell"] {{
+    color: {theme.SECONDARY_INK} !important;
+    border-color: rgba(151,178,218,0.09) !important;
+}}
+div[data-testid="stDataFrame"] [role="row"]:hover [role="gridcell"],
+div[data-testid="stDataEditor"] [role="row"]:hover [role="gridcell"] {{
+    background: rgba(108,140,255,0.08) !important;
+}}
+div[data-testid="stDataFrame"] button,
+div[data-testid="stDataEditor"] button {{
+    border-radius: 8px !important;
+}}
+div[data-testid="stTable"] {{
+    overflow: hidden;
+    border: 1px solid {theme.BORDER};
+    border-radius: 12px;
+}}
+div[data-testid="stTable"] table {{
+    margin: 0;
+}}
+div[data-testid="stTable"] th {{
+    background: #10243b;
+    color: {theme.PRIMARY_INK};
+}}
+div[data-testid="stTable"] td {{
+    border-color: rgba(151,178,218,0.09);
+}}
+
+div[data-testid="stTabs"] [data-baseweb="tab-list"] {{
+    gap: 6px;
+    padding: 5px;
+    border: 1px solid {theme.BORDER};
+    border-radius: 12px;
+    background: rgba(7,21,38,0.68);
+}}
+div[data-testid="stTabs"] [data-baseweb="tab"] {{
+    min-height: 2.35rem;
+    border-radius: 8px;
+    padding: 0.35rem 0.8rem;
+}}
+div[data-testid="stTabs"] [aria-selected="true"] {{
+    background: rgba(108,140,255,0.16);
+    color: {theme.PRIMARY_INK};
+}}
+
+div[data-testid="stAlert"] {{
+    border-radius: 14px;
+    border: 1px solid {theme.BORDER};
+    box-shadow: 0 10px 28px rgba(0,0,0,0.14);
+}}
+
+hr {{
+    border-color: {theme.BORDER} !important;
+}}
+
+[data-testid="stCaptionContainer"] {{
+    color: {theme.MUTED_INK};
+}}
+
+div[data-testid="stSlider"] [role="slider"] {{
+    border: 2px solid {theme.PAGE_PLANE};
+    box-shadow: 0 0 0 3px rgba(108,140,255,0.18);
+}}
+
+::-webkit-scrollbar {{
+    width: 10px;
+    height: 10px;
+}}
+::-webkit-scrollbar-track {{
+    background: rgba(6,16,31,0.45);
+}}
+::-webkit-scrollbar-thumb {{
+    background: #2a4564;
+    border: 2px solid {theme.PAGE_PLANE};
+    border-radius: 999px;
+}}
+::-webkit-scrollbar-thumb:hover {{
+    background: {theme.SERIES_BLUE};
 }}
 
 /* ------------------------------------------------------------- loading -- */
@@ -201,6 +533,91 @@ div[data-testid="stStatusWidget"] svg {{
     from {{ transform: rotate(0deg); }}
     to {{ transform: rotate(360deg); }}
 }}
+
+@media (max-width: 768px) {{
+    .block-container {{
+        padding: 1.25rem 1rem 3rem;
+    }}
+
+    h1 {{
+        font-size: 2rem !important;
+        line-height: 1.14 !important;
+    }}
+
+    h2 {{
+        font-size: 1.45rem !important;
+    }}
+
+    div[data-testid="stHorizontalBlock"] {{
+        flex-wrap: wrap !important;
+        gap: 0.75rem !important;
+    }}
+
+    div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {{
+        flex: 1 1 100% !important;
+        width: 100% !important;
+        min-width: 100% !important;
+    }}
+
+    div[data-testid="stVerticalBlockBorderWrapper"] {{
+        border-radius: 15px !important;
+    }}
+
+    .st-key-login_card {{
+        margin-top: 1rem;
+    }}
+
+    .st-key-login_card div[data-testid="stVerticalBlockBorderWrapper"] {{
+        padding: 0.25rem;
+        border-radius: 18px !important;
+    }}
+
+    .stButton > button,
+    .stFormSubmitButton > button,
+    .stDownloadButton > button {{
+        width: 100%;
+        min-height: 2.9rem;
+    }}
+
+    .ft-card {{
+        min-height: 120px;
+        padding: 15px;
+    }}
+
+    .ft-row {{
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 12px 2px;
+    }}
+
+    .ft-row-left {{
+        flex: 1 1 calc(100% - 50px);
+        min-width: 0;
+    }}
+
+    .ft-row > div:last-child {{
+        width: 100%;
+        justify-content: space-between;
+        padding-left: 44px;
+    }}
+
+    .ft-row-name,
+    .ft-row-sub {{
+        overflow-wrap: anywhere;
+    }}
+
+    div[data-testid="stDataFrame"],
+    div[data-testid="stDataEditor"] {{
+        max-width: calc(100vw - 2rem);
+        overflow-x: auto;
+    }}
+
+    div[role="radiogroup"] label {{
+        flex: 1 1 auto;
+        justify-content: center;
+    }}
+}}
 </style>
 """
 
@@ -213,10 +630,18 @@ def inject_css() -> None:
 
 
 def pill(label: str, kind: str = "muted") -> str:
-    return f'<span class="ft-pill ft-pill-{kind}">{label}</span>'
+    return (
+        f'<span class="ft-pill ft-pill-{escape(kind)}">'
+        f'{escape(label)}</span>'
+    )
 
 
-def credit_card_html(card_name: str, due_this_month: float, active_count: int) -> str:
+def credit_card_html(
+    card_name: str,
+    due_this_month: float,
+    active_count: int,
+    hide_amount: bool = False,
+) -> str:
     # Deliberately zero-indented / single-line: st.markdown still runs its
     # content through a markdown pass even in unsafe_allow_html mode, and
     # any line indented 4+ spaces reads as a fenced code block — which is
@@ -224,34 +649,47 @@ def credit_card_html(card_name: str, due_this_month: float, active_count: int) -
     # with real indentation rendered as literal escaped text instead of
     # markup for anything past the first couple of nesting levels.
     start, end = theme.CARD_GRADIENTS.get(card_name, theme.CARD_GRADIENT_DEFAULT)
+    safe_card_name = escape(card_name)
+    logo = theme.CARD_LOGOS.get(card_name, card_name[:1].upper())
     plural = "installment" if active_count == 1 else "installments"
+    displayed_amount = "••••••" if hide_amount else f"₱{due_this_month:,.2f}"
     return (
         f'<div class="ft-card" style="background: linear-gradient(135deg, {start}, {end});">'
         f'<div class="ft-card-top">'
-        f'<div class="ft-card-brand">💳 {card_name}</div>'
-        f'<div style="font-size:0.75rem; opacity:0.8;">{active_count} active {plural}</div>'
+        f'<div class="ft-card-brand">'
+        f'<span class="ft-card-logo">{escape(logo)}</span>'
+        f'<span>{safe_card_name}</span>'
         f'</div>'
-        f'<div class="ft-card-number">•••• •••• •••• ••••</div>'
+        f'<div class="ft-card-active">{active_count} active {plural}</div>'
+        f'</div>'
         f'<div class="ft-card-bottom"><div>'
         f'<div class="ft-card-label">Due this month</div>'
-        f'<div class="ft-card-amount">₱{due_this_month:,.2f}</div>'
+        f'<div class="ft-card-amount">{displayed_amount}</div>'
         f'</div></div>'
         f'</div>'
     )
 
 
-def payment_row_html(icon: str, name: str, subtitle: str, amount: float, pill_html: str = "") -> str:
+def payment_row_html(
+    icon: str,
+    name: str,
+    subtitle: str,
+    amount: float,
+    pill_html: str = "",
+    hide_amount: bool = False,
+) -> str:
+    displayed_amount = "••••••" if hide_amount else f"₱{amount:,.2f}"
     return (
         f'<div class="ft-row">'
         f'<div class="ft-row-left">'
-        f'<div class="ft-row-icon">{icon}</div>'
+        f'<div class="ft-row-icon">{escape(icon)}</div>'
         f'<div>'
-        f'<div class="ft-row-name">{name}</div>'
-        f'<div class="ft-row-sub">{subtitle}</div>'
+        f'<div class="ft-row-name">{escape(name)}</div>'
+        f'<div class="ft-row-sub">{escape(subtitle)}</div>'
         f'</div></div>'
         f'<div style="display:flex; align-items:center; gap:10px;">'
         f'{pill_html}'
-        f'<div class="ft-row-amount">₱{amount:,.2f}</div>'
+        f'<div class="ft-row-amount">{displayed_amount}</div>'
         f'</div>'
         f'</div>'
     )

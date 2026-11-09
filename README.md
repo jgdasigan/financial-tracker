@@ -74,34 +74,80 @@ December) just sum together for that month.
 Everything is computed on the fly from these rows — there's no separate
 "schedule" table to keep in sync.
 
-## 1. Set up a free Postgres database
+## 1. Configure the database backend
 
-Data is stored in Postgres so it survives restarts once this is deployed
-(a local SQLite file would reset every time Streamlit Community Cloud
-redeploys or restarts the app). Either free tier works, nothing in the code
-is provider-specific:
+The app supports Postgres and DynamoDB so a migration can be verified and
+rolled back without another code deployment. Set `DATA_BACKEND = "postgres"`
+until the final DynamoDB verification passes.
 
-- **Supabase** (recommended, generous free tier): create a project at
-  [supabase.com](https://supabase.com) → Project Settings → Database →
-  Connection string → **URI**. If your network is IPv4-only, use the
-  "Session pooler" connection string instead of the direct one.
+For Postgres, set `DB_URL` to the Supabase connection string. If your network
+is IPv4-only, use the Session pooler URI.
 
-You get something like:
+For DynamoDB, create one Standard table with string partition key `pk`, string
+sort key `sk`, provisioned capacity, no secondary indexes, and the default
+AWS-owned encryption key. Add these secrets:
 
+```toml
+DATA_BACKEND = "dynamodb"
+AWS_ACCESS_KEY_ID = "restricted-iam-access-key"
+AWS_SECRET_ACCESS_KEY = "restricted-iam-secret-key"
+AWS_DEFAULT_REGION = "ap-southeast-2"
+DYNAMODB_TABLE_NAME = "financial-tracker-prod"
+DYNAMODB_APP_ID = "default"
 ```
-postgresql://USER:PASSWORD@HOST:PORT/DBNAME
+
+The IAM identity should be restricted to item operations and `DescribeTable`
+on this table. Copy `.streamlit/secrets.toml.example` to
+`.streamlit/secrets.toml` and fill in the real values plus `APP_PASSWORD`.
+The real file is gitignored; never put credentials in source files, comments,
+documentation, or commits.
+
+Postgres tables are created and upgraded automatically. The DynamoDB table
+must be created in AWS before switching backends.
+
+### Migrate Supabase data
+
+Create the provider-native SQL backups first. These commands use the Supabase
+CLI through `npx` and keep each run in a timestamped, gitignored directory:
+
+```powershell
+$env:SUPABASE_DB_URL = Read-Host "Paste the Supabase Session pooler URI"
+$backup = "supabase_backups\$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+New-Item -ItemType Directory -Force $backup | Out-Null
+
+npx supabase@latest db dump --remote="$env:SUPABASE_DB_URL" `
+  --file "$backup\roles.sql" --role-only
+npx supabase@latest db dump --remote="$env:SUPABASE_DB_URL" `
+  --file "$backup\schema.sql"
+npx supabase@latest db dump --remote="$env:SUPABASE_DB_URL" `
+  --file "$backup\data.sql" --data-only --use-copy `
+  --exclude "storage.buckets_vectors" `
+  --exclude "storage.vector_indexes"
+
+Get-FileHash "$backup\*.sql" -Algorithm SHA256
 ```
 
-Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml` and paste
-your connection string in as `DB_URL`, plus pick a value for `APP_PASSWORD`
-(the login gate — see `lib/auth.py`). **That file only** is gitignored —
-never paste a real password anywhere else in the repo (a README, a comment,
-a commit message); anything outside `secrets.toml` is fair game to end up on
-a public GitHub repo once you deploy.
+Do not commit these files. Copy the completed directory to a second private
+location before continuing. Then run the app-specific canonical export:
 
-Tables (and any new columns, like the `card` tag) are created/migrated
-automatically the first time the app connects (see `lib/db.py`) — there's no
-migration step to run by hand.
+```powershell
+$env:DB_URL = $env:SUPABASE_DB_URL
+py scripts\migrate_supabase_to_dynamodb.py --dry-run
+```
+
+Configure AWS credentials locally, then import and verify:
+
+```powershell
+$env:AWS_ACCESS_KEY_ID = "your-restricted-access-key"
+$env:AWS_SECRET_ACCESS_KEY = "your-restricted-secret-key"
+py scripts\migrate_supabase_to_dynamodb.py `
+  --table-name financial-tracker-prod `
+  --region ap-southeast-2 `
+  --replace-target
+```
+
+The backend must not be switched unless every entity reports `MATCH`. Keep the
+Supabase SQL dumps and JSON export in two private locations.
 
 ## 2. Run it locally
 
@@ -130,12 +176,11 @@ call, and one is all you need.
    private repo, GitHub will prompt you to grant Streamlit's app access to
    it specifically (it reads the repo via a read-only deploy key, not full
    account access).
-3. In the app's **Settings → Secrets**, paste the same `DB_URL` and
-   `APP_PASSWORD` lines you put in your local `secrets.toml`. This is how
-   the hosted app reaches your Supabase/Neon database and gates access —
-   the file itself never leaves your machine.
-4. Deploy. The app's filesystem resets on every redeploy/restart, but since
-   all your data lives in Postgres, that's harmless.
+3. In the app's **Settings → Secrets**, paste the contents of your local
+   `secrets.toml`. Keep `DATA_BACKEND = "postgres"` through the migration
+   rehearsal. Change only that value to `"dynamodb"` after final verification.
+4. Deploy. The app's filesystem resets on every redeploy/restart, while the
+   selected external database preserves the data.
 
 ## Project layout
 
@@ -147,7 +192,10 @@ views/affordability_checker.py        # Card vs. cash affordability check
 views/weekly_income.py                # Weekly income vs. bills-due-that-week check
 views/settings.py                     # Income sources, savings, buffer
 lib/auth.py                           # single-user password gate
-lib/db.py                             # Postgres connection + CRUD
+lib/db.py                             # backend selector + Postgres CRUD
+lib/dynamodb_db.py                    # DynamoDB CRUD and record mapping
+scripts/migrate_supabase_to_dynamodb.py # verified export/import utility
+infra/dynamodb-iam-policy.json        # least-privilege table access policy
 lib/calculations.py                   # schedule/projection/affordability math (pure functions)
 lib/bill_edits.py                     # diffing logic for the editable bills table (unit-testable, no Streamlit)
 lib/theme.py                          # dark color palette constants

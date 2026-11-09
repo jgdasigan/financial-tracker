@@ -40,13 +40,29 @@ def require_login() -> None:
     _, center, _ = st.columns([1, 1.2, 1])
     with center:
         st.write("")
-        st.write("")
-        with st.container(border=True):
-            st.markdown("### 💸 Bill & Savings Tracker")
-            st.caption("Enter the app password to continue.")
+        with st.container(border=True, key="login_card"):
+            st.markdown(
+                '<div class="ft-login-brand">'
+                '<div class="ft-login-mark">₱</div>'
+                '<div class="ft-login-eyebrow">PERSONAL FINANCE</div>'
+                '<div class="ft-login-title">Bill & Savings Tracker</div>'
+                '<div class="ft-login-subtitle">'
+                'Your private view of bills, income, and savings.'
+                '</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
             with st.form("login_form"):
-                entered = st.text_input("Password", type="password")
-                submitted = st.form_submit_button("Log in", type="primary")
+                entered = st.text_input(
+                    "Password",
+                    type="password",
+                    placeholder="Enter your app password",
+                )
+                submitted = st.form_submit_button(
+                    "Continue",
+                    type="primary",
+                    use_container_width=True,
+                )
                 if submitted:
                     if _check_password(entered):
                         st.session_state[SESSION_KEY] = True

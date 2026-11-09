@@ -98,7 +98,13 @@ MIGRATIONS = [
 
 # Cards the affordability checker and manage-bills form offer by name; users
 # can still type a custom tag via the "Other" option in the UI.
-KNOWN_CARDS = ["RCBC", "BDO"]
+KNOWN_CARDS = [
+    "RCBC",
+    "BDO",
+    "Maribank CC",
+    "Tiktok PayLater",
+    "Shopee PayLater",
+]
 
 DEFAULT_SETTINGS = {
     "monthly_income": "0",
@@ -398,3 +404,47 @@ def delete_income_entry(entry_id: int) -> None:
     engine = get_engine()
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM income_entries WHERE id = :id"), {"id": entry_id})
+
+
+# Keep Postgres as the default until the verified cutover changes DATA_BACKEND.
+# Rebinding the existing API makes rollback a secrets-only change for every view.
+def _selected_backend() -> str:
+    try:
+        configured_backend = st.secrets["DATA_BACKEND"]
+    except Exception:
+        configured_backend = None
+    return str(configured_backend or os.environ.get("DATA_BACKEND", "postgres")).lower()
+
+
+if _selected_backend() == "dynamodb":
+    from lib import dynamodb_db as _dynamodb_backend
+
+    _BACKEND_EXPORTS = [
+        "KNOWN_CARDS",
+        "get_engine",
+        "get_settings",
+        "save_settings",
+        "list_income_sources",
+        "total_income",
+        "add_income_source",
+        "delete_income_source",
+        "list_income_bonuses",
+        "add_income_bonus",
+        "delete_income_bonus",
+        "list_bills",
+        "list_card_tags",
+        "add_tag",
+        "list_all_tags",
+        "add_bill",
+        "update_bill",
+        "delete_bill",
+        "list_income_entries",
+        "upsert_income_entry",
+        "delete_income_entry",
+    ]
+    globals().update(
+        {
+            export_name: getattr(_dynamodb_backend, export_name)
+            for export_name in _BACKEND_EXPORTS
+        }
+    )
