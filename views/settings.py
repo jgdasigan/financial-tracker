@@ -3,9 +3,15 @@ from datetime import date
 
 import streamlit as st
 
+from lib import calculations as calc
 from lib import db
+from lib import style
 
 st.title("⚙️ Settings")
+st.caption(
+    "Manage the income, savings, and safety assumptions used throughout "
+    "the tracker."
+)
 
 try:
     settings = db.get_settings()
@@ -15,14 +21,35 @@ except Exception as e:
     st.error(f"Couldn't reach the database: {e}")
     st.stop()
 
-st.caption("These values feed the Dashboard projection and the Affordability checker's defaults.")
+
+def _pick_bonus_month() -> date:
+    current_month = calc.month_start(date.today())
+    first_option = calc.add_months(current_month, -60)
+    month_options = calc.month_range(first_option, 181)
+    default_month = date(current_month.year, 12, 1)
+    default_index = (
+        month_options.index(default_month)
+        if default_month in month_options
+        else 60
+    )
+    return st.selectbox(
+        "Month",
+        month_options,
+        index=default_index,
+        format_func=lambda month: month.strftime("%B %Y"),
+        width=200,
+    )
+
 
 # Global layout is "wide" (set once in app.py for the dashboard), so center
 # this form in a narrower column rather than letting it stretch edge to edge.
 _, center, _ = st.columns([1, 2, 1])
 with center:
-    st.subheader("Monthly income")
-    st.caption("Add one row per income stream (day job, side gig, …) — the total below feeds everything else.")
+    style.section_header(
+        "Monthly income",
+        "Add one row per income stream. Their total feeds every projection "
+        "and affordability check.",
+    )
     with st.container(border=True):
         if income_sources.empty:
             st.caption("No income sources yet — add one below.")
@@ -56,8 +83,10 @@ with center:
                 st.rerun()
 
     st.write("")
-    st.subheader("One-time income")
-    st.caption("A bonus, 13th month pay, tax refund, … added on top of the recurring total for just that month.")
+    style.section_header(
+        "One-time income",
+        "Add bonuses, refunds, and other income that applies to one month.",
+    )
     with st.container(border=True):
         if income_bonuses.empty:
             st.caption("None logged yet — add one below.")
@@ -76,7 +105,7 @@ with center:
         with c1:
             bonus_name = st.text_input("Name", placeholder="e.g. December bonus")
         with c2:
-            bonus_month = st.date_input("Month", value=date(date.today().year, 12, 1))
+            bonus_month = _pick_bonus_month()
         with c3:
             bonus_amount = st.number_input("Amount", min_value=0.0, step=500.0)
         with c4:
@@ -92,10 +121,22 @@ with center:
                 st.rerun()
 
     st.write("")
-    with st.form("settings_form"), st.container(border=True):
+    style.section_header(
+        "Savings, onhand, and safety buffer",
+        "Set today's balances and the minimum monthly room you want to "
+        "preserve.",
+    )
+    with st.form("settings_form"):
         current_savings = st.number_input(
             "Current savings", min_value=0.0, step=500.0, value=settings["current_savings"],
             help="Your savings balance as of today. The dashboard projects forward from here.",
+        )
+        onhand = st.number_input(
+            "Onhand",
+            min_value=0.0,
+            step=500.0,
+            value=settings["onhand"],
+            help="Cash currently available for weekly expenses.",
         )
         safety_buffer = st.number_input(
             "Minimum leftover to keep each month", min_value=0.0, step=100.0, value=settings["safety_buffer"],
@@ -103,13 +144,16 @@ with center:
         )
         submitted = st.form_submit_button("Save", type="primary")
         if submitted:
-            db.save_settings(current_savings, safety_buffer)
+            db.save_settings(current_savings, onhand, safety_buffer)
             st.success("Saved.")
             st.rerun()
 
     st.write("")
+    style.section_header(
+        "Database connection",
+        "Confirm that the selected data backend is reachable.",
+    )
     with st.container(border=True):
-        st.markdown("**Database connection**")
         try:
             db.get_engine()
             st.success("Connected.")

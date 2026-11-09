@@ -19,4 +19,5 @@ pg.run()
 
 # Rendered last so it lands at the bottom of the sidebar's DOM order, below
 # whatever page-specific sidebar controls the current page just added.
+style.sidebar_brand()
 auth.logout_button()

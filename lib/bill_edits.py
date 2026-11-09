@@ -12,6 +12,8 @@ from datetime import date
 
 import pandas as pd
 
+from lib import calculations as calc
+
 
 @dataclass
 class BillsDiff:
@@ -73,6 +75,65 @@ def is_completed_bill(bill, current_month: date | None = None) -> bool:
     return month_after_final_payment <= comparison_month
 
 
+def bill_kwargs_from_record(record) -> dict:
+    return {
+        "name": _clean_str(record["name"]),
+        "bill_type": _clean_str(record["bill_type"]),
+        "base_amount": _clean_amount(record["base_amount"]),
+        "conversion_fee": _clean_amount(record["conversion_fee"]),
+        "start_month": _to_month_start(record["start_month"]),
+        "duration_months": _clean_int(record["duration_months"]),
+        "card": _clean_card(record["card"]),
+        "due_day": _clean_int(record["due_day"]) or 1,
+        "include_in_projection": (
+            bool(record["include_in_projection"])
+            if pd.notna(record["include_in_projection"])
+            else True
+        ),
+        "notes": _clean_str(record["notes"]),
+    }
+
+
+def original_update_fields(record, field_names) -> dict:
+    normalized_record = bill_kwargs_from_record(record)
+    return {
+        field_name: normalized_record[field_name]
+        for field_name in field_names
+    }
+
+
+def filter_bills(
+    bills_df: pd.DataFrame,
+    selected_month: date | None = None,
+    selected_type: str | None = None,
+    alphabetical: bool = False,
+) -> pd.DataFrame:
+    filtered = bills_df.copy()
+
+    if selected_month is not None and not filtered.empty:
+        starts_in_month = filtered["start_month"].map(
+            lambda start_month: (
+                calc.month_start(start_month)
+                == calc.month_start(selected_month)
+            )
+        )
+        filtered = filtered.loc[starts_in_month]
+
+    if selected_type:
+        filtered = filtered.loc[
+            filtered["bill_type"] == selected_type
+        ]
+
+    if alphabetical and not filtered.empty:
+        filtered = filtered.sort_values(
+            "name",
+            key=lambda names: names.astype(str).str.casefold(),
+            kind="stable",
+        )
+
+    return filtered
+
+
 def diff_bills_edit(original_df: pd.DataFrame, edited_df: pd.DataFrame) -> BillsDiff:
     """Compare the table as loaded from the DB (`original_df`, must include
     `id`) against what st.data_editor returned (`edited_df`, same columns —
@@ -92,18 +153,7 @@ def diff_bills_edit(original_df: pd.DataFrame, edited_df: pd.DataFrame) -> Bills
         if not name or not bill_type or not row["base_amount"] or pd.isna(start):
             diff.skipped += 1
             continue
-        diff.adds.append({
-            "name": name,
-            "bill_type": bill_type,
-            "base_amount": _clean_amount(row["base_amount"]),
-            "conversion_fee": _clean_amount(row["conversion_fee"]),
-            "start_month": _to_month_start(start),
-            "duration_months": _clean_int(row["duration_months"]),
-            "card": _clean_card(row["card"]),
-            "due_day": _clean_int(row["due_day"]) or 1,
-            "include_in_projection": bool(row["include_in_projection"]) if pd.notna(row["include_in_projection"]) else True,
-            "notes": _clean_str(row["notes"]),
-        })
+        diff.adds.append(bill_kwargs_from_record(row))
 
     for _, row in edited_df.iterrows():
         if pd.isna(row["id"]) or int(row["id"]) not in original_by_id.index:

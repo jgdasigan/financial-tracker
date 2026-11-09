@@ -11,16 +11,12 @@ import streamlit as st
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
-KNOWN_CARDS = [
-    "RCBC",
-    "BDO",
-    "Maribank CC",
-    "Tiktok PayLater",
-    "Shopee PayLater",
-]
+from lib.card_tags import KNOWN_CARDS, normalize_card_tag
+
 DEFAULT_SETTINGS = {
     "monthly_income": "0",
     "current_savings": "0",
+    "onhand": "0",
     "safety_buffer": "0",
 }
 
@@ -298,14 +294,20 @@ def get_settings() -> dict[str, float]:
     return {
         "monthly_income": total_income(),
         "current_savings": float(values.get("current_savings", 0) or 0),
+        "onhand": float(values.get("onhand", 0) or 0),
         "safety_buffer": float(values.get("safety_buffer", 0) or 0),
     }
 
 
-def save_settings(current_savings: float, safety_buffer: float) -> None:
+def save_settings(
+    current_savings: float,
+    onhand: float,
+    safety_buffer: float,
+) -> None:
     table = get_table()
     for key, value in {
         "current_savings": current_savings,
+        "onhand": onhand,
         "safety_buffer": safety_buffer,
     }.items():
         table.put_item(
@@ -405,9 +407,19 @@ def add_tag(name: str) -> None:
 
 def list_all_tags() -> list[str]:
     registered_tags = {
-        record["name"] for record in query_entity_records("tags") if record.get("name")
+        normalize_card_tag(record["name"])
+        for record in query_entity_records("tags")
+        if record.get("name")
     }
-    return sorted(set(KNOWN_CARDS) | registered_tags | set(list_card_tags()))
+    used_tags = {
+        normalize_card_tag(tag)
+        for tag in list_card_tags()
+    }
+    return sorted(
+        set(KNOWN_CARDS)
+        | (registered_tags - {None})
+        | (used_tags - {None})
+    )
 
 
 def add_bill(
@@ -421,12 +433,13 @@ def add_bill(
     due_day: int = 1,
     include_in_projection: bool = True,
     notes: str = "",
-) -> None:
+) -> int:
+    bill_id = _next_id("bills")
     get_table().put_item(
         Item=item_from_record(
             "bills",
             {
-                "id": _next_id("bills"),
+                "id": bill_id,
                 "name": name,
                 "bill_type": bill_type,
                 "base_amount": base_amount,
@@ -441,6 +454,7 @@ def add_bill(
             },
         )
     )
+    return bill_id
 
 
 def update_bill(bill_id: int, **fields: Any) -> None:

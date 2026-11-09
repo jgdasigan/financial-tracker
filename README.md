@@ -11,7 +11,7 @@ login gate, since this is built for one person.
 ## Pages
 
 - **Dashboard** — KPI cards, a credit-card visual per card tag (RCBC/BDO/…)
-  showing what's due on that card **this month**, a "card payments due by
+  showing what's due on that card for a selected month, a "card payments due by
   month" chart + table (same idea, projected forward, alongside the
   projected savings balance), an income vs. bills vs. savings chart, an
   "upcoming payments" list, and the full payments schedule split into
@@ -21,8 +21,9 @@ login gate, since this is built for one person.
   month a one-time income entry (see Settings) lands in.
 - **Manage bills** — the "Current bills" table is directly editable: change
   any cell, delete a row from its ⋮ menu, or fill in the blank bottom row to
-  add one — Save commits everything at once (or Undo discards it). The
-  "Card / tag" column is a dropdown built from RCBC/BDO plus every tag
+  add one. Valid changes save automatically; **Undo last change** reverses
+  the latest edited, added, or deleted row. The
+  "Card / tag" column is a dropdown built from the known cards plus every tag
   you've used or registered; the box above the table registers a brand-new
   tag so it's pickable there without needing a bill on it yet first. Each
   bill also has a **due day of month**, used by the Weekly income page, and
@@ -38,13 +39,13 @@ login gate, since this is built for one person.
 - **Weekly income** — for a variable, weekly-paid income stream: log what a
   given week's paycheck was (per month, 1st–4th week — the common "sweldo"
   payroll split, not calendar weeks), and see it checked against whichever
-  bills have their due day inside that same week, before the next paycheck
-  lands. Logging the same week again edits that figure in place.
+  bills have their due day inside that same week using onhand cash plus that
+  week's income. Logging the same week again edits that figure in place.
 - **Settings** — one row per **income source** (day job, side gig, …; the
   total is what every other page calls "monthly income"), plus **one-time
   income** (a December bonus, 13th month pay, a tax refund, …) that adds on
   top of that total for just the month it's logged against, current
-  savings, and the minimum leftover/savings buffer.
+  savings, onhand cash, and the minimum leftover/savings buffer.
 
 ## Data model
 

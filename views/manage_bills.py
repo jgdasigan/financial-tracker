@@ -5,9 +5,15 @@ from datetime import date
 import streamlit as st
 
 from lib import bill_edits
+from lib import calculations as calc
 from lib import db
+from lib import style
 
 st.title("📋 Manage bills")
+st.caption(
+    "Create, update, organize, and review every recurring payment and "
+    "scheduled expense."
+)
 
 try:
     bills_df = db.list_bills()
@@ -39,7 +45,13 @@ def _pick_card(current: str | None, key_prefix: str) -> str | None:
     until submit."""
     options = _card_options()
     index = options.index(current) if current in options else 0
-    choice = st.selectbox("Card / tag", options, index=index, key=f"{key_prefix}_card_choice")
+    choice = st.selectbox(
+        "Card / tag",
+        options,
+        index=index,
+        key=f"{key_prefix}_card_choice",
+        width=220,
+    )
     if choice == "Other (type below)":
         typed = st.text_input("Custom tag name", key=f"{key_prefix}_card_custom").strip()
         if typed:
@@ -48,17 +60,43 @@ def _pick_card(current: str | None, key_prefix: str) -> str | None:
     return None if choice == "None" else choice
 
 
+def _pick_month(label: str) -> date:
+    current_month = calc.month_start(date.today())
+    first_option = calc.add_months(current_month, -60)
+    month_options = calc.month_range(first_option, 121)
+    return st.selectbox(
+        label,
+        month_options,
+        index=60,
+        format_func=lambda month: month.strftime("%B %Y"),
+        key="add_start_month",
+        width=200,
+    )
+
+
 # ------------------------------------------------------------------ add form --
-st.subheader("Add a bill")
-bill_type = st.selectbox(
-    "Type", ["recurring", "installment", "onetime", "pakaskas"], format_func=str.title,
-    help=TYPE_HELP["recurring"], key="add_bill_type",
+style.section_header(
+    "Add a bill",
+    "Set the schedule, amount, due date, and card or tag.",
 )
+with st.container(
+    horizontal=True,
+    horizontal_alignment="left",
+    vertical_alignment="bottom",
+    gap="small",
+):
+    bill_type = st.selectbox(
+        "Type",
+        ["recurring", "installment", "onetime", "pakaskas"],
+        format_func=str.title,
+        key="add_bill_type",
+        width=180,
+    )
+    card = _pick_card(None, "add")
+
 st.caption(TYPE_HELP[bill_type])
 
-card = _pick_card(None, "add")  # optional for every type — "None" is always the first choice
-
-with st.form("add_bill_form", clear_on_submit=True), st.container(border=True):
+with st.form("add_bill_form", clear_on_submit=True):
     name = st.text_input("Name", placeholder="e.g. Clothes, Shoes, Groceries")
     col1, col2 = st.columns(2)
 
@@ -69,7 +107,7 @@ with st.form("add_bill_form", clear_on_submit=True), st.container(border=True):
         with col2:
             fee_mode = st.radio("Conversion fee (first month only)", ["Fixed amount", "% of monthly amount"], horizontal=True)
             fee_value = st.number_input("Fee value", min_value=0.0, step=10.0)
-            start_month = st.date_input("Start month", value=date(date.today().year, date.today().month, 1))
+            start_month = _pick_month("Start month")
         conversion_fee = round(monthly_amount * fee_value / 100, 2) if fee_mode.startswith("%") else round(fee_value, 2)
 
     elif bill_type == "recurring":
@@ -77,7 +115,7 @@ with st.form("add_bill_form", clear_on_submit=True), st.container(border=True):
             monthly_amount = st.number_input("Monthly amount", min_value=0.0, step=50.0)
             ongoing = st.checkbox("Ongoing (no end date)", value=True)
         with col2:
-            start_month = st.date_input("Start month", value=date(date.today().year, date.today().month, 1))
+            start_month = _pick_month("Start month")
             duration_months = None if ongoing else st.number_input("Runs for how many months", min_value=1, step=1, value=6)
         conversion_fee = 0.0
 
@@ -86,14 +124,14 @@ with st.form("add_bill_form", clear_on_submit=True), st.container(border=True):
             monthly_amount = st.number_input("Monthly amount", min_value=0.0, step=50.0)
             duration_months = st.number_input("Number of months", min_value=1, step=1, value=1)
         with col2:
-            start_month = st.date_input("Start month", value=date(date.today().year, date.today().month, 1))
+            start_month = _pick_month("Start month")
         conversion_fee = 0.0
 
     else:  # onetime
         with col1:
             monthly_amount = st.number_input("Amount", min_value=0.0, step=50.0)
         with col2:
-            start_month = st.date_input("Month it's due", value=date(date.today().year, date.today().month, 1))
+            start_month = _pick_month("Month it's due")
         duration_months = 1
         conversion_fee = 0.0
 
@@ -137,10 +175,87 @@ st.divider()
 
 # -------------------------------------------------------------------- listing --
 EDITOR_KEY = "bills_editor"
+UNDO_KEY = "bills_last_undo"
 EDITABLE_COLUMNS = [
     "id", "name", "bill_type", "base_amount", "conversion_fee",
     "start_month", "duration_months", "card", "due_day", "include_in_projection", "notes",
 ]
+
+
+def _filter_months():
+    if bills_df.empty:
+        return []
+
+    today_month = calc.month_start(date.today())
+    earliest_month = min(
+        calc.month_start(month)
+        for month in bills_df["start_month"]
+    )
+    latest_month = calc.add_months(today_month, 23)
+
+    for record in bills_df.to_dict("records"):
+        start_month = calc.month_start(record["start_month"])
+        latest_month = max(latest_month, start_month)
+        duration = record.get("duration_months")
+        try:
+            duration_months = int(duration)
+        except (TypeError, ValueError):
+            duration_months = None
+
+        if record["bill_type"] == "onetime":
+            duration_months = 1
+        if duration_months:
+            final_month = calc.add_months(
+                start_month,
+                duration_months - 1,
+            )
+            latest_month = max(latest_month, final_month)
+
+    month_count = (
+        (latest_month.year - earliest_month.year) * 12
+        + latest_month.month
+        - earliest_month.month
+        + 1
+    )
+    return calc.month_range(earliest_month, month_count)
+
+
+FILTER_MONTHS = _filter_months()
+
+
+def _table_filters(key_prefix: str):
+    with st.container(
+        horizontal=True,
+        horizontal_alignment="left",
+        gap="small",
+    ):
+        selected_month = st.selectbox(
+            "Month",
+            [None, *FILTER_MONTHS],
+            format_func=lambda month: (
+                "All months"
+                if month is None
+                else calc.month_label(month)
+            ),
+            key=f"{key_prefix}_month",
+            width=190,
+        )
+        selected_type = st.selectbox(
+            "Type",
+            [None, "recurring", "installment", "onetime", "pakaskas"],
+            format_func=lambda bill_type: (
+                "All types"
+                if bill_type is None
+                else bill_type.title()
+            ),
+            key=f"{key_prefix}_type",
+            width=170,
+        )
+    alphabetical = st.toggle(
+        "A–Z",
+        key=f"{key_prefix}_alphabetical",
+    )
+    return selected_month, selected_type, alphabetical
 
 if bills_df.empty:
     current_bills_df = bills_df.copy()
@@ -153,24 +268,50 @@ else:
     current_bills_df = bills_df.loc[~archive_mask].copy()
     archived_bills_df = bills_df.loc[archive_mask].copy()
 
-st.subheader("Current bills")
-st.caption("Edit any cell directly. Use the row's ⋮ menu (or select + Delete key) to remove a row, or the blank bottom row to add one.")
+style.section_header(
+    "Current bills",
+    "Changes save automatically. Use the row menu to remove a bill or the "
+    "blank bottom row to add one.",
+)
 
-# with st.form("register_tag_form", clear_on_submit=True):
-#     t1, t2 = st.columns([4, 1])
-#     with t1:
-#         new_tag = st.text_input("Register a new card/tag", placeholder="e.g. Metrobank — makes it pickable in the Card/tag column below")
-#     with t2:
-#         st.write("")
-#         register = st.form_submit_button("Add tag")
-#     if register and new_tag.strip():
-#         db.add_tag(new_tag.strip())
-#         st.rerun()
+current_month, current_type, current_alphabetical = _table_filters(
+    "current_bills",
+)
+visible_current_bills_df = bill_edits.filter_bills(
+    current_bills_df,
+    selected_month=current_month,
+    selected_type=current_type,
+    alphabetical=current_alphabetical,
+)
 
-if current_bills_df.empty:
-    st.info("No current bills — add one above.")
+autosave_status, undo_col = st.columns([8, 2])
+autosave_status.caption("Autosave on")
+undo_action = st.session_state.get(UNDO_KEY)
+if undo_col.button(
+    "Undo last change",
+    disabled=undo_action is None,
+    width="stretch",
+):
+    if undo_action["kind"] == "delete":
+        db.delete_bill(undo_action["bill_id"])
+    elif undo_action["kind"] == "restore":
+        db.add_bill(**undo_action["bill"])
+    elif undo_action["kind"] == "update":
+        db.update_bill(
+            undo_action["bill_id"],
+            **undo_action["fields"],
+        )
+    st.session_state.pop(UNDO_KEY, None)
+    st.session_state.pop(EDITOR_KEY, None)
+    st.rerun()
+
+if visible_current_bills_df.empty:
+    if current_bills_df.empty:
+        st.info("No current bills — add one above.")
+    else:
+        st.info("No current bills match these filters.")
 else:
-    editable = current_bills_df[EDITABLE_COLUMNS].copy()
+    editable = visible_current_bills_df[EDITABLE_COLUMNS].copy()
     # st.data_editor renders a blank text cell as the literal word "None"
     # rather than empty — fill those with "" so it reads as blank. Numeric
     # blanks (duration_months, for "ongoing") don't have that same fix
@@ -208,40 +349,71 @@ else:
         },
     )
 
-    save_col, undo_col, _spacer = st.columns([2, 2, 19])
-    if save_col.button("Save changes", type="primary"):
-        diff = bill_edits.diff_bills_edit(current_bills_df, edited)
-        for bill_id in diff.deletes:
-            db.delete_bill(bill_id)
-        for kwargs in diff.adds:
-            db.add_bill(**kwargs)
-        for bill_id, fields in diff.updates:
-            db.update_bill(bill_id, **fields)
+    diff = bill_edits.diff_bills_edit(visible_current_bills_df, edited)
+    change_applied = False
 
-        msg = []
-        if diff.updates: msg.append(f"{len(diff.updates)} updated")
-        if diff.adds: msg.append(f"{len(diff.adds)} added")
-        if diff.deletes: msg.append(f"{len(diff.deletes)} deleted")
-        if diff.skipped: msg.append(f"{diff.skipped} incomplete new row(s) skipped")
-        st.success(", ".join(msg) if msg else "No changes.")
-        st.session_state.pop(EDITOR_KEY, None)
-        st.rerun()
+    for bill_id in diff.deletes:
+        original = visible_current_bills_df.loc[
+            visible_current_bills_df["id"] == bill_id
+        ].iloc[0]
+        st.session_state[UNDO_KEY] = {
+            "kind": "restore",
+            "bill": bill_edits.bill_kwargs_from_record(original),
+        }
+        db.delete_bill(bill_id)
+        change_applied = True
 
-    if undo_col.button("Undo changes"):
+    for kwargs in diff.adds:
+        new_bill_id = db.add_bill(**kwargs)
+        st.session_state[UNDO_KEY] = {
+            "kind": "delete",
+            "bill_id": new_bill_id,
+        }
+        change_applied = True
+
+    for bill_id, fields in diff.updates:
+        original = visible_current_bills_df.loc[
+            visible_current_bills_df["id"] == bill_id
+        ].iloc[0]
+        st.session_state[UNDO_KEY] = {
+            "kind": "update",
+            "bill_id": bill_id,
+            "fields": bill_edits.original_update_fields(
+                original,
+                fields,
+            ),
+        }
+        db.update_bill(bill_id, **fields)
+        change_applied = True
+
+    if change_applied:
         st.session_state.pop(EDITOR_KEY, None)
         st.rerun()
 
 st.divider()
-st.subheader("Archived bills")
-st.caption(
+style.section_header(
+    "Archived bills",
     "Finite bills move here automatically after their final scheduled payment "
-    "month. Archived records remain available for reference."
+    "month and remain available for reference.",
 )
 
-if archived_bills_df.empty:
-    st.info("No completed bills yet.")
+archive_month, archive_type, archive_alphabetical = _table_filters(
+    "archived_bills",
+)
+visible_archived_bills_df = bill_edits.filter_bills(
+    archived_bills_df,
+    selected_month=archive_month,
+    selected_type=archive_type,
+    alphabetical=archive_alphabetical,
+)
+
+if visible_archived_bills_df.empty:
+    if archived_bills_df.empty:
+        st.info("No completed bills yet.")
+    else:
+        st.info("No archived bills match these filters.")
 else:
-    archived = archived_bills_df[EDITABLE_COLUMNS].copy()
+    archived = visible_archived_bills_df[EDITABLE_COLUMNS].copy()
     archived["card"] = archived["card"].fillna("")
     archived["notes"] = archived["notes"].fillna("")
     st.dataframe(

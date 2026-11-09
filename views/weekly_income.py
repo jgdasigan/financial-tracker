@@ -8,10 +8,12 @@ import streamlit as st
 from lib import calculations as calc
 from lib import db
 from lib import style
-from lib import theme
 
 st.title("🗓️ Weekly income check")
-st.caption("For the weekly/variable income stream — log a week's pay and check it against bills due that week.")
+st.caption(
+    "Log variable weekly income and compare it with every bill due before "
+    "the next paycheck."
+)
 
 try:
     settings = db.get_settings()
@@ -25,7 +27,10 @@ bills = bills_df.to_dict("records") if not bills_df.empty else []
 _ORDINALS = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th"}
 WEEK_LABELS = {w: f"{_ORDINALS[w]} week (days {lo}–{hi})" for w, (lo, hi) in calc.WEEK_DAY_RANGES.items()}
 
-st.subheader("Pick a week")
+style.section_header(
+    "Pick a week",
+    "Select the month and payroll week, then record the income received.",
+)
 with st.container(border=True):
     c1, c2 = st.columns(2)
     with c1:
@@ -50,19 +55,30 @@ with st.container(border=True):
 week_lbl = calc.week_label(month, week_number)
 due = calc.bills_due_in_week(bills, month, week_number)
 total_due = sum(amt for _, amt in due)
-leftover = amount - total_due
+onhand = settings["onhand"]
+leftover = onhand + amount - total_due
 
 st.write("")
-k1, k2, k3 = st.columns(3)
+style.section_header(
+    "Weekly summary",
+    "Onhand cash plus weekly income, less every payment due this week.",
+)
+k1, k2, k3, k4 = st.columns(4)
 for col, label, value in [
-    (k1, "Income this week", f"₱{amount:,.2f}"),
-    (k2, "Bills due this week", f"₱{total_due:,.2f}"),
-    (k3, "Leftover", f"₱{leftover:,.2f}"),
+    (k1, "Onhand", f"₱{onhand:,.2f}"),
+    (k2, "Income this week", f"₱{amount:,.2f}"),
+    (k3, "Bills due this week", f"₱{total_due:,.2f}"),
+    (k4, "Remaining", f"₱{leftover:,.2f}"),
 ]:
     with col:
         with st.container(border=True):
-            st.markdown(f"<div style='color:{theme.MUTED_INK}; font-size:0.8rem;'>{label}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div style='font-size:1.4rem; font-weight:700;'>{value}</div>", unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="ft-kpi">'
+                f'<div class="ft-kpi-label">{label}</div>'
+                f'<div class="ft-kpi-value">{value}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
 buffer = settings["safety_buffer"]
 if leftover >= buffer:
@@ -70,7 +86,10 @@ if leftover >= buffer:
 else:
     st.error(f"**Short for {week_lbl}** — short by ₱{buffer - leftover:,.2f} against your ₱{buffer:,.2f} buffer.")
 
-st.subheader(f"Bills due — {week_lbl}")
+style.section_header(
+    f"Bills due — {week_lbl}",
+    "Payments whose due day falls inside the selected payroll week.",
+)
 with st.container(border=True):
     if not due:
         st.caption("No bills have a due day falling in this week. Set a bill's \"Due day of month\" on Manage bills.")

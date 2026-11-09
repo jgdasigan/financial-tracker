@@ -14,6 +14,8 @@ import streamlit as st
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
+from lib.card_tags import KNOWN_CARDS, normalize_card_tag
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
@@ -98,17 +100,10 @@ MIGRATIONS = [
 
 # Cards the affordability checker and manage-bills form offer by name; users
 # can still type a custom tag via the "Other" option in the UI.
-KNOWN_CARDS = [
-    "RCBC",
-    "BDO",
-    "Maribank CC",
-    "Tiktok PayLater",
-    "Shopee PayLater",
-]
-
 DEFAULT_SETTINGS = {
     "monthly_income": "0",
     "current_savings": "0",
+    "onhand": "0",
     "safety_buffer": "0",
 }
 
@@ -178,14 +173,20 @@ def get_settings() -> dict:
     return {
         "monthly_income": total_income(),  # sum of income_sources — see below
         "current_savings": float(values.get("current_savings", 0) or 0),
+        "onhand": float(values.get("onhand", 0) or 0),
         "safety_buffer": float(values.get("safety_buffer", 0) or 0),
     }
 
 
-def save_settings(current_savings: float, safety_buffer: float) -> None:
+def save_settings(
+    current_savings: float,
+    onhand: float,
+    safety_buffer: float,
+) -> None:
     engine = get_engine()
     updates = {
         "current_savings": current_savings,
+        "onhand": onhand,
         "safety_buffer": safety_buffer,
     }
     with engine.begin() as conn:
@@ -305,7 +306,11 @@ def add_tag(name: str) -> None:
 def list_all_tags() -> list[str]:
     """Every card/tag a user could pick: the built-ins, anything explicitly
     registered via add_tag, and anything already in use on a bill."""
-    return sorted(set(KNOWN_CARDS) | set(_list_registered_tags()) | set(list_card_tags()))
+    discovered_tags = {
+        normalize_card_tag(tag)
+        for tag in _list_registered_tags() + list_card_tags()
+    }
+    return sorted(set(KNOWN_CARDS) | (discovered_tags - {None}))
 
 
 def _list_registered_tags() -> list[str]:
@@ -326,28 +331,31 @@ def add_bill(
     due_day: int = 1,
     include_in_projection: bool = True,
     notes: str = "",
-) -> None:
+) -> int:
     engine = get_engine()
     with engine.begin() as conn:
-        conn.execute(
-            text(
-                "INSERT INTO bills (name, bill_type, base_amount, conversion_fee, "
-                "start_month, duration_months, card, due_day, include_in_projection, notes) "
-                "VALUES (:name, :bill_type, :base_amount, :conversion_fee, "
-                ":start_month, :duration_months, :card, :due_day, :include_in_projection, :notes)"
-            ),
-            {
-                "name": name,
-                "bill_type": bill_type,
-                "base_amount": base_amount,
-                "conversion_fee": conversion_fee,
-                "start_month": start_month,
-                "duration_months": duration_months,
-                "card": card,
-                "due_day": due_day,
-                "include_in_projection": include_in_projection,
-                "notes": notes,
-            },
+        return int(
+            conn.execute(
+                text(
+                    "INSERT INTO bills (name, bill_type, base_amount, conversion_fee, "
+                    "start_month, duration_months, card, due_day, include_in_projection, notes) "
+                    "VALUES (:name, :bill_type, :base_amount, :conversion_fee, "
+                    ":start_month, :duration_months, :card, :due_day, :include_in_projection, :notes) "
+                    "RETURNING id"
+                ),
+                {
+                    "name": name,
+                    "bill_type": bill_type,
+                    "base_amount": base_amount,
+                    "conversion_fee": conversion_fee,
+                    "start_month": start_month,
+                    "duration_months": duration_months,
+                    "card": card,
+                    "due_day": due_day,
+                    "include_in_projection": include_in_projection,
+                    "notes": notes,
+                },
+            ).scalar_one()
         )
 
 

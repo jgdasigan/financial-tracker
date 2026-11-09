@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from datetime import date
 
-from lib.calculations import bill_due_date, bills_due_between
+from lib.calculations import bill_due_date, bills_due_between, card_due_by_month
 
 
 def recurring_bill(due_day: int) -> dict:
@@ -35,6 +35,41 @@ class UpcomingPaymentTests(unittest.TestCase):
         self.assertEqual(
             [payment[0] for payment in payments],
             [date(2026, 8, 31), date(2026, 9, 1)],
+        )
+
+
+class CardTagTests(unittest.TestCase):
+    def test_known_card_aliases_share_dashboard_totals(self) -> None:
+        month = date(2026, 11, 1)
+        bills = [
+            {
+                **recurring_bill(1),
+                "card": "maribank cc",
+                "base_amount": 100,
+            },
+            {
+                **recurring_bill(1),
+                "card": "TIKTOK PAYLATER",
+                "base_amount": 200,
+            },
+            {
+                **recurring_bill(1),
+                "card": "Spaylater",
+                "base_amount": 300,
+            },
+        ]
+
+        self.assertEqual(
+            card_due_by_month(bills, "Maribank CC", [month]),
+            [100],
+        )
+        self.assertEqual(
+            card_due_by_month(bills, "Tiktok PayLater", [month]),
+            [200],
+        )
+        self.assertEqual(
+            card_due_by_month(bills, "Shopee PayLater", [month]),
+            [300],
         )
 
 

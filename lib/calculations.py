@@ -11,6 +11,8 @@ from datetime import date
 
 import pandas as pd
 
+from lib.card_tags import normalize_card_tag
+
 BillDict = dict  # {name, bill_type, base_amount, conversion_fee, start_month, duration_months}
 
 
@@ -101,8 +103,7 @@ def card_tag(bill: BillDict) -> str | None:
     come back from Postgres as NaN (a float) rather than None once read
     through pandas, and NaN is truthy in Python — `if bill.get("card")` would
     silently treat "no tag" as "has a tag" and blow up ordering/grouping."""
-    card = bill.get("card")
-    return card if isinstance(card, str) and card else None
+    return normalize_card_tag(bill.get("card"))
 
 
 def _duration_or_none(duration) -> int | None:
@@ -195,13 +196,13 @@ def remaining_amount(bill: BillDict, as_of_month: date) -> float:
 def card_due_by_month(bills: list[BillDict], tag: str, months: list[date]) -> list[float]:
     """The amount actually charged to `tag` (a card/tag name) in each month
     in `months` — i.e. bill_amount_for_month() summed across that card's
-    installment/pakaskas bills. This is the payment due that month, not a
-    running remaining-balance total.
+    tagged bills. This is the payment due that month, not a running
+    remaining-balance total.
 
     Pakaskas counts here *regardless* of include_in_projection: whether the
     money is "yours" or not is a separate question from whether the card
     bill itself is due — you still have to pay the card either way."""
-    relevant = [b for b in bills if b["bill_type"] in ("installment", "pakaskas") and card_tag(b) == tag]
+    relevant = [bill for bill in bills if card_tag(bill) == tag]
     return [sum(bill_amount_for_month(b, m) or 0.0 for b in relevant) for m in months]
 
 

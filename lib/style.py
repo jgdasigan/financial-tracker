@@ -71,6 +71,45 @@ section[data-testid="stSidebar"] [data-testid="stSidebarNav"] a[aria-current="pa
     box-shadow: inset 3px 0 0 {theme.SERIES_BLUE};
 }}
 
+.ft-sidebar-brand {{
+    position: fixed;
+    left: 1rem;
+    bottom: 4.25rem;
+    z-index: 100;
+    display: flex;
+    width: 17rem;
+    box-sizing: border-box;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    padding: 0.75rem;
+    border: 1px solid {theme.BORDER};
+    border-radius: 14px;
+    background: rgba(108,140,255,0.08);
+}}
+.ft-sidebar-mark {{
+    display: flex;
+    width: 34px;
+    height: 34px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background: linear-gradient(145deg, {theme.SERIES_BLUE}, #4f6fe5);
+    color: #ffffff;
+    font-weight: 800;
+}}
+.ft-sidebar-name {{
+    color: {theme.PRIMARY_INK};
+    font-size: 0.86rem;
+    font-weight: 750;
+    line-height: 1.2;
+}}
+.ft-sidebar-sub {{
+    margin-top: 2px;
+    color: {theme.MUTED_INK};
+    font-size: 0.65rem;
+}}
+
 /* Sidebar as a flex column so the logout button (rendered last, see
    lib/auth.py) can be pinned to the bottom edge via margin-top:auto instead
    of sitting wherever it happens to fall in the nav + page-controls flow. */
@@ -78,16 +117,19 @@ div[data-testid="stSidebarContent"] {{
     display: flex !important;
     flex-direction: column !important;
     min-height: 100dvh;
-    padding-bottom: 1rem;
+    padding-bottom: 10rem;
 }}
 .st-key-logout_btn {{
-    position: sticky;
-    bottom: 0;
-    z-index: 5;
-    margin-top: auto !important;
-    padding-top: 1rem;
-    padding-bottom: 0.25rem;
-    background: linear-gradient(180deg, transparent, rgba(7,21,38,0.98) 32%);
+    position: fixed;
+    left: 1rem;
+    bottom: 1rem;
+    z-index: 100;
+    width: 17rem;
+    margin: 0 !important;
+    border: 1px solid {theme.BORDER};
+    border-radius: 14px;
+    padding: 0;
+    background: transparent;
 }}
 
 /* Bordered containers (our "cards") get a touch more rounding + a subtle
@@ -161,6 +203,33 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{
     padding-top: 1.15rem;
 }}
 
+.ft-section-heading {{
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    margin: 1.4rem 0 0.75rem;
+}}
+.ft-section-marker {{
+    width: 4px;
+    height: 34px;
+    flex: 0 0 4px;
+    margin-top: 2px;
+    border-radius: 999px;
+    background: linear-gradient({theme.SERIES_BLUE}, {theme.SERIES_AQUA});
+}}
+.ft-section-title {{
+    color: {theme.PRIMARY_INK};
+    font-size: 1.12rem;
+    font-weight: 750;
+    letter-spacing: -0.02em;
+}}
+.ft-section-description {{
+    margin-top: 0.2rem;
+    color: {theme.MUTED_INK};
+    font-size: 0.79rem;
+    line-height: 1.5;
+}}
+
 .ft-pill {{
     display: inline-flex;
     align-items: center;
@@ -188,17 +257,6 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{
     justify-content: space-between;
     min-height: 116px;
     box-shadow: 0 14px 30px rgba(0,0,0,0.24);
-}}
-.ft-card::after {{
-    content: "";
-    position: absolute;
-    width: 150px;
-    height: 150px;
-    right: -50px;
-    top: -70px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.12);
-    filter: blur(2px);
 }}
 .ft-card-top {{ display: flex; flex-direction: column; gap: 8px; align-items: flex-start; position: relative; z-index: 1; }}
 .ft-card-brand {{
@@ -248,8 +306,26 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{
 .ft-row-amount {{ font-weight: 700; font-size: 0.95rem; }}
 
 .ft-kpi {{
+    display: flex;
+    min-height: 66px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     padding: 0.15rem 0;
+    box-sizing: border-box;
     text-align: center;
+    transform: translateY(-4px);
+}}
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.ft-kpi) {{
+    display: flex;
+    min-height: 66px;
+    align-items: center;
+    padding: 0 !important;
+}}
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.ft-kpi)
+div[data-testid="stVerticalBlock"] {{
+    width: 100%;
+    gap: 0 !important;
 }}
 .ft-kpi-label {{
     color: {theme.MUTED_INK};
@@ -264,20 +340,28 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{
 }}
 
 .ft-upcoming-scroll {{
-    max-height: 415px;
+    height: 370px;
+    max-height: 370px;
     overflow-y: auto;
     overscroll-behavior: contain;
     padding-right: 8px;
 }}
 
+.st-key-projection_panel div[data-testid="stVerticalBlockBorderWrapper"],
+.st-key-upcoming_panel div[data-testid="stVerticalBlockBorderWrapper"] {{
+    height: 455px;
+    min-height: 455px;
+}}
+
 /* -------------------------------------------------------------- buttons -- */
 .stButton > button, .stFormSubmitButton > button, .stDownloadButton > button {{
-    min-height: 2.45rem;
-    border-radius: 9px !important;
+    min-height: 2.25rem;
+    border-radius: 999px !important;
     border: 1px solid {theme.BORDER} !important;
     font-weight: 600;
-    padding: 0.42rem 0.95rem;
-    background: rgba(17,36,58,0.52);
+    font-size: 0.78rem;
+    padding: 0.36rem 0.9rem;
+    background: rgba(17,36,58,0.42);
     box-shadow: none;
     transition: background 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
 }}
@@ -290,8 +374,8 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{
     background: rgba(108,140,255,0.16);
 }}
 .stButton > button[kind="primary"], .stFormSubmitButton > button[kind="primary"] {{
-    background: {theme.SERIES_BLUE} !important;
-    border-color: {theme.SERIES_BLUE} !important;
+    background: #526fe0 !important;
+    border-color: #6f89ed !important;
     color: #ffffff !important;
 }}
 .stButton > button[kind="primary"]:hover, .stFormSubmitButton > button[kind="primary"]:hover {{
@@ -310,6 +394,16 @@ div[class*="st-key-del_"] button {{
 }}
 .st-key-logout_btn button {{
     width: 100%;
+    justify-content: flex-start;
+    padding-left: 0.8rem;
+    border: 0 !important;
+    background: transparent !important;
+    color: {theme.MUTED_INK};
+    box-shadow: none !important;
+}}
+.st-key-logout_btn button:hover {{
+    background: rgba(108,140,255,0.08) !important;
+    color: {theme.PRIMARY_INK};
 }}
 div[class*="st-key-dashboard_hide_"] button {{
     width: 2.1rem;
@@ -323,7 +417,19 @@ div[class*="st-key-dashboard_hide_"] button:hover {{
 }}
 
 /* --------------------------------------------------- dropdowns / inputs -- */
-div[data-baseweb="select"] > div,
+div[data-baseweb="select"] > div {{
+    min-height: 2.2rem;
+    border-radius: 999px !important;
+    border-color: rgba(151,178,218,0.16) !important;
+    background: rgba(8,22,39,0.72) !important;
+    box-shadow: none !important;
+    font-size: 0.78rem;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}}
+div[data-baseweb="select"]:hover > div {{
+    border-color: rgba(108,140,255,0.48) !important;
+    background: rgba(108,140,255,0.08) !important;
+}}
 .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea {{
     min-height: 2.65rem;
     border-radius: 12px !important;
@@ -335,6 +441,23 @@ div[data-baseweb="select"]:focus-within > div,
 .stTextInput input:focus, .stNumberInput input:focus, .stDateInput input:focus {{
     border-color: {theme.SERIES_BLUE} !important;
     box-shadow: 0 0 0 3px rgba(108,140,255,0.16) !important;
+}}
+
+div[data-testid="stSegmentedControl"] [data-baseweb="button-group"] {{
+    overflow: hidden;
+    padding: 3px;
+    border: 1px solid {theme.BORDER};
+    border-radius: 10px;
+    background: rgba(6,16,31,0.55);
+}}
+div[data-testid="stSegmentedControl"] button {{
+    border: 0 !important;
+    border-radius: 7px !important;
+}}
+
+div[data-testid="stCheckbox"],
+div[data-testid="stToggle"] {{
+    padding: 0.15rem 0;
 }}
 /* Selected chips inside a multiselect */
 span[data-baseweb="tag"] {{
@@ -383,33 +506,28 @@ div[data-testid="stDataFrame"],
 div[data-testid="stDataEditor"] {{
     position: relative;
     overflow: hidden;
-    background: rgba(7,21,38,0.82);
-    border: 1px solid rgba(151,178,218,0.20);
-    border-radius: 12px;
-    box-shadow: 0 10px 28px rgba(0,0,0,0.14);
-}}
-div[data-testid="stDataFrame"]::before,
-div[data-testid="stDataEditor"]::before {{
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    z-index: 3;
-    background: linear-gradient(90deg, {theme.SERIES_BLUE}, {theme.SERIES_AQUA});
+    background: rgba(8,22,39,0.92);
+    border: 1px solid rgba(151,178,218,0.18);
+    border-radius: 16px;
+    box-shadow:
+        0 18px 42px rgba(0,0,0,0.18),
+        inset 0 1px 0 rgba(255,255,255,0.025);
 }}
 div[data-testid="stDataFrame"] [role="columnheader"],
 div[data-testid="stDataEditor"] [role="columnheader"] {{
-    color: {theme.PRIMARY_INK} !important;
-    background: #10243b !important;
+    color: {theme.MUTED_INK} !important;
+    background: #0d2036 !important;
     border-color: {theme.BORDER} !important;
-    font-weight: 700 !important;
+    font-size: 0.68rem !important;
+    font-weight: 750 !important;
+    letter-spacing: 0.045em;
+    text-transform: uppercase;
 }}
 div[data-testid="stDataFrame"] [role="gridcell"],
 div[data-testid="stDataEditor"] [role="gridcell"] {{
     color: {theme.SECONDARY_INK} !important;
     border-color: rgba(151,178,218,0.09) !important;
+    font-size: 0.78rem !important;
 }}
 div[data-testid="stDataFrame"] [role="row"]:hover [role="gridcell"],
 div[data-testid="stDataEditor"] [role="row"]:hover [role="gridcell"] {{
@@ -417,7 +535,8 @@ div[data-testid="stDataEditor"] [role="row"]:hover [role="gridcell"] {{
 }}
 div[data-testid="stDataFrame"] button,
 div[data-testid="stDataEditor"] button {{
-    border-radius: 8px !important;
+    border-radius: 999px !important;
+    color: {theme.MUTED_INK} !important;
 }}
 div[data-testid="stTable"] {{
     overflow: hidden;
@@ -584,6 +703,17 @@ div[data-testid="stStatusWidget"] svg {{
         padding: 15px;
     }}
 
+    .st-key-projection_panel div[data-testid="stVerticalBlockBorderWrapper"],
+    .st-key-upcoming_panel div[data-testid="stVerticalBlockBorderWrapper"] {{
+        height: auto;
+        min-height: 0;
+    }}
+
+    .ft-upcoming-scroll {{
+        height: auto;
+        max-height: 350px;
+    }}
+
     .ft-row {{
         align-items: flex-start;
         flex-wrap: wrap;
@@ -629,6 +759,38 @@ def inject_css() -> None:
     st.markdown('<div class="ft-loading-bar"></div>', unsafe_allow_html=True)
 
 
+def section_header(title: str, description: str = "") -> None:
+    description_html = (
+        f'<div class="ft-section-description">{escape(description)}</div>'
+        if description
+        else ""
+    )
+    st.markdown(
+        '<div class="ft-section-heading">'
+        '<div class="ft-section-marker"></div>'
+        '<div>'
+        f'<div class="ft-section-title">{escape(title)}</div>'
+        f'{description_html}'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def sidebar_brand() -> None:
+    with st.sidebar:
+        st.markdown(
+            '<div class="ft-sidebar-brand">'
+            '<div class="ft-sidebar-mark">₱</div>'
+            '<div>'
+            '<div class="ft-sidebar-name">Financial Tracker</div>'
+            '<div class="ft-sidebar-sub">PRIVATE WORKSPACE</div>'
+            '</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+
 def pill(label: str, kind: str = "muted") -> str:
     return (
         f'<span class="ft-pill ft-pill-{escape(kind)}">'
@@ -640,6 +802,7 @@ def credit_card_html(
     card_name: str,
     due_this_month: float,
     active_count: int,
+    due_month_label: str,
     hide_amount: bool = False,
 ) -> str:
     # Deliberately zero-indented / single-line: st.markdown still runs its
@@ -663,7 +826,7 @@ def credit_card_html(
         f'<div class="ft-card-active">{active_count} active {plural}</div>'
         f'</div>'
         f'<div class="ft-card-bottom"><div>'
-        f'<div class="ft-card-label">Due this month</div>'
+        f'<div class="ft-card-label">Due {escape(due_month_label)}</div>'
         f'<div class="ft-card-amount">{displayed_amount}</div>'
         f'</div></div>'
         f'</div>'

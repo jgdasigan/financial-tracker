@@ -9,10 +9,14 @@ import streamlit as st
 
 from lib import calculations as calc
 from lib import db
+from lib import style
 from lib import theme
 
 st.title("🛒 Affordability checker")
-st.caption("Model a purchase — on installment or in cash — and see if it still leaves you with leeway.")
+st.caption(
+    "Model a purchase on installment or in cash and see how it changes "
+    "your monthly room and savings."
+)
 
 try:
     settings = db.get_settings()
@@ -26,7 +30,10 @@ existing_bills = bills_df.to_dict("records") if not bills_df.empty else []
 extra_income = calc.sum_bonuses_by_month(bonuses_df.to_dict("records")) if not bonuses_df.empty else {}
 CARD_CHOICES = db.KNOWN_CARDS + ["Other"]
 
-st.subheader("The item")
+style.section_header(
+    "The item",
+    "Describe the purchase and choose how you plan to pay.",
+)
 with st.container(border=True):
     payment_mode = st.radio("Payment mode", ["Card (installment)", "Cash (pay from savings now)"], horizontal=True)
     is_card = payment_mode.startswith("Card")
@@ -44,7 +51,7 @@ with st.container(border=True):
             fee_mode = st.radio("Conversion fee (first month only)", ["Fixed amount", "% of price"], horizontal=True)
             fee_value = st.number_input("Fee value", min_value=0.0, step=10.0)
             start_month = st.date_input("First payment month", value=date(date.today().year, date.today().month, 1))
-        card_choice = st.selectbox("Card", CARD_CHOICES)
+        card_choice = st.selectbox("Card", CARD_CHOICES, width=280)
         card = st.text_input("Card name", key="custom_card").strip() or "Other" if card_choice == "Other" else card_choice
     else:
         with c2:
@@ -52,7 +59,10 @@ with st.container(border=True):
         down_payment, duration_months, fee_value, fee_mode = 0.0, 1, 0.0, "Fixed amount"
         card = "Cash"
 
-st.subheader("Budget assumptions")
+style.section_header(
+    "Budget assumptions",
+    "Adjust the income, savings, and safety buffer used for this scenario.",
+)
 with st.container(border=True):
     b1, b2, b3 = st.columns(3)
     with b1:
@@ -86,6 +96,10 @@ else:
     }
 
 st.divider()
+style.section_header(
+    "Purchase impact",
+    "A quick summary before the full month-by-month assessment.",
+)
 m1, m2 = st.columns(2)
 if is_card:
     m1.metric("Monthly installment", f"₱{monthly_amount:,.2f}")
@@ -96,6 +110,10 @@ else:
 
 # --------------------------------------------------------------- verdict --
 st.divider()
+style.section_header(
+    "Assessment",
+    "Compare your position before and after the proposed purchase.",
+)
 if is_card:
     horizon_months = int(duration_months) + 2  # runway past the last installment
     result = calc.check_affordability(
@@ -132,7 +150,10 @@ else:
     comparison["affordable"] = True
     comparison.loc[0, "affordable"] = cash_result.affordable  # only the purchase month carries the verdict
 
-st.subheader("Leftover per month: before vs. after this purchase")
+style.section_header(
+    "Monthly comparison",
+    "See how the purchase changes available cash across the projection.",
+)
 colors = [theme.STATUS_GOOD if ok else theme.STATUS_CRITICAL for ok in comparison["affordable"]]
 labels = ["OK" if ok else "Short" for ok in comparison["affordable"]]
 

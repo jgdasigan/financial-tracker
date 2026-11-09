@@ -12,7 +12,10 @@ from lib import style
 from lib import theme
 
 st.title("💸 Bill & Savings Tracker")
-st.caption("Projected monthly payments and savings, computed from your income, current savings, and active bills.")
+st.caption(
+    "Projected monthly payments and savings, computed from your income, "
+    "current savings, and active bills."
+)
 
 try:
     settings = db.get_settings()
@@ -56,10 +59,15 @@ def _amounts_hidden(section_key: str) -> bool:
         else "Hide amounts"
     )
     if st.button(
-        "👁" if st.session_state[state_key] else "🙈",
+        "",
         key=f"{state_key}_button",
         help=help_text,
         type="tertiary",
+        icon=(
+            ":material/visibility:"
+            if st.session_state[state_key]
+            else ":material/visibility_off:"
+        ),
     ):
         st.session_state[state_key] = not st.session_state[state_key]
     return st.session_state[state_key]
@@ -87,21 +95,26 @@ _, overview_eye = st.columns([20, 1])
 with overview_eye:
     overview_hidden = _amounts_hidden("overview")
 
-k1, k2, k3, k4 = st.columns(4)
+k1, k2, k3, k4, k5 = st.columns(5)
 kpi_specs = [
     (
         k1,
         "🏦 Current savings",
         _currency(settings["current_savings"], overview_hidden),
     ),
-    (k2, income_label, _currency(this_month_income, overview_hidden)),
     (
-        k3,
+        k2,
+        "💵 Onhand",
+        _currency(settings["onhand"], overview_hidden),
+    ),
+    (k3, income_label, _currency(this_month_income, overview_hidden)),
+    (
+        k4,
         "🧾 This month's bills",
         _currency(this_month_bills, overview_hidden),
     ),
     (
-        k4,
+        k5,
         "✅ This month's leftover",
         _currency(this_month_leftover, overview_hidden),
     ),
@@ -156,27 +169,40 @@ def _apply_chart_privacy(fig: go.Figure, hidden: bool) -> None:
 # ------------------------------------------------------------- credit cards --
 # Pakaskas counts here regardless of include_in_projection: the card bill is
 # still due either way, whether or not the money is projected as "yours".
-card_bills = [b for b in bills if b["bill_type"] in ("installment", "pakaskas") and calc.card_tag(b)]
+cards_title, cards_month_control, cards_eye = st.columns([25, 3, 1.5])
+with cards_title:
+    st.subheader("Cards")
+with cards_month_control:
+    card_month_options = calc.month_range(calc.month_start(today), 24)
+    selected_card_month = st.selectbox(
+        "Card due month",
+        card_month_options,
+        format_func=calc.month_label,
+        label_visibility="collapsed",
+        help="Choose which month to show on the card summaries.",
+        width=180,
+        
+    )
+with cards_eye:
+    cards_hidden = _amounts_hidden("cards")
+
+card_bills = [bill for bill in bills if calc.card_tag(bill)]
 cards_seen = {
     card_name: {"due": 0.0, "count": 0}
     for card_name in db.KNOWN_CARDS
 }
 for b in card_bills:
-    due_this_month = calc.bill_amount_for_month(b, calc.month_start(today)) or 0.0
-    if due_this_month <= 0:
-        continue  # nothing charged to this card this month
+    due_for_selected_month = (
+        calc.bill_amount_for_month(b, selected_card_month) or 0.0
+    )
+    if due_for_selected_month <= 0:
+        continue
     card_name = calc.card_tag(b)
     entry = cards_seen.setdefault(card_name, {"due": 0.0, "count": 0})
-    entry["due"] += due_this_month
+    entry["due"] += due_for_selected_month
     entry["count"] += 1
 
 if cards_seen:
-    cards_title, cards_eye = st.columns([20, 1])
-    with cards_title:
-        st.subheader("Cards")
-    with cards_eye:
-        cards_hidden = _amounts_hidden("cards")
-
     card_cols = st.columns(len(cards_seen))
     for i, (card_name, info) in enumerate(cards_seen.items()):
         with card_cols[i]:
@@ -185,6 +211,7 @@ if cards_seen:
                     card_name,
                     info["due"],
                     info["count"],
+                    calc.month_label(selected_card_month),
                     hide_amount=cards_hidden,
                 ),
                 unsafe_allow_html=True,
@@ -236,7 +263,7 @@ if cards_seen:
 main_col, side_col = st.columns([2, 1])
 
 with main_col:
-    with st.container(border=True):
+    with st.container(border=True, key="projection_panel"):
         projection_title, projection_eye = st.columns([12, 1])
         with projection_title:
             st.markdown(f"<div style='color:{theme.MUTED_INK}; font-size:0.8rem;'>Projected balance, {n_months} months out</div>", unsafe_allow_html=True)
@@ -262,6 +289,7 @@ with main_col:
             plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
             font=dict(family=theme.FONT_FAMILY, color=theme.PRIMARY_INK),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+            height=350,
             margin=dict(t=10, l=10, r=10, b=10),
             yaxis=dict(title="₱", gridcolor=theme.GRIDLINE, zerolinecolor=theme.BASELINE),
             xaxis=dict(gridcolor=theme.GRIDLINE),
@@ -279,7 +307,7 @@ with main_col:
         )
 
 with side_col:
-    with st.container(border=True):
+    with st.container(border=True, key="upcoming_panel"):
         upcoming_title, upcoming_eye = st.columns([8, 1])
         with upcoming_title:
             st.markdown("**Upcoming payments**")
@@ -339,16 +367,26 @@ with side_col:
             )
 
 st.write("")
-schedule_title, schedule_eye = st.columns([20, 1])
+all_tags = sorted({calc.card_tag(b) for b in bills if calc.card_tag(b)})
+if all_tags:
+    schedule_title, schedule_filter, schedule_eye = st.columns([15, 6, 1])
+    with schedule_filter:
+        selected_tags = st.multiselect(
+            "Filter by tag",
+            all_tags,
+            placeholder="Filter by card or tag",
+            help="Leave empty to show every bill regardless of tag.",
+            label_visibility="collapsed",
+        )
+else:
+    schedule_title, schedule_eye = st.columns([20, 1])
+    selected_tags = []
+
 with schedule_title:
     st.subheader("Full payments schedule")
 with schedule_eye:
     schedule_hidden = _amounts_hidden("schedule")
 
-all_tags = sorted({calc.card_tag(b) for b in bills if calc.card_tag(b)})
-selected_tags = st.multiselect(
-    "Filter by tag", all_tags, help="Leave empty to show every bill regardless of tag.",
-) if all_tags else []
 filtered_bills = [b for b in bills if not selected_tags or calc.card_tag(b) in selected_tags]
 
 TABLE_SPECS = [
